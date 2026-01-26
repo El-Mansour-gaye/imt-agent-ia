@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    restart: always
+
+# Notes:
+# - Redis is used for session management or caching.
+# - Access it via localhost:6379.
