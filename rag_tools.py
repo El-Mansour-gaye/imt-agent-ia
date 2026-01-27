@@ -3,9 +3,11 @@ import os
 import json
 import tiktoken
 import chromadb
-from chromadb.config import Settings
 import google.generativeai as genai
 from dotenv import load_dotenv
+
+# Suppress ChromaDB telemetry
+os.environ["CHROMA_TELEMETRY_IMPL"] = "0"
 
 load_dotenv()
 
@@ -20,73 +22,44 @@ def get_token_count(text, model="cl100k_base"):
     enc = tiktoken.get_encoding(model)
     return len(enc.encode(text))
 
-def recursive_split(text, max_tokens, overlap_tokens):
-    """Recursive splitting logic with overlap."""
-    if get_token_count(text) <= max_tokens:
+def split_text(text, max_tokens=512, overlap_tokens=102):
+    """
+    Iterative text splitting logic with overlap.
+    Directly uses tokens for precise boundary management.
+    """
+    enc = tiktoken.get_encoding("cl100k_base")
+    tokens = enc.encode(text)
+
+    if not tokens:
+        return []
+
+    if len(tokens) <= max_tokens:
         return [text]
 
-    separators = ["\n\n", "\n", ". ", " ", ""]
-    final_chunks = []
+    chunks = []
+    start = 0
+    while start < len(tokens):
+        end = start + max_tokens
+        chunk_tokens = tokens[start:end]
+        chunks.append(enc.decode(chunk_tokens))
 
-    # Try splitting by separators
-    selected_sep = ""
-    for sep in separators:
-        if sep in text:
-            selected_sep = sep
+        if end >= len(tokens):
             break
 
-    if selected_sep != "":
-        parts = text.split(selected_sep)
-        current_parts = []
-        current_tokens = 0
+        # Standard overlap: the next chunk starts 'overlap_tokens' before the current one ends
+        start = end - overlap_tokens
 
-        for part in parts:
-            part_tokens = get_token_count(part)
-            if current_tokens + part_tokens > max_tokens and current_parts:
-                # Store current chunk
-                chunk_text = selected_sep.join(current_parts)
-                final_chunks.append(chunk_text)
+        # Safety: if overlap >= max_tokens, we would loop.
+        # But here overlap_tokens is 20% of max_tokens.
+        if start >= end: # Should not happen with 20%
+            start = end
 
-                # Handle overlap: keep parts that fit in overlap_tokens
-                new_parts = []
-                new_tokens = 0
-                for p in reversed(current_parts):
-                    p_tok = get_token_count(p)
-                    if new_tokens + p_tok <= overlap_tokens:
-                        new_parts.insert(0, p)
-                        new_tokens += p_tok
-                    else:
-                        break
-                current_parts = new_parts
-                current_tokens = new_tokens
-
-            current_parts.append(part)
-            current_tokens += part_tokens
-
-        if current_parts:
-            final_chunks.append(selected_sep.join(current_parts))
-    else:
-        # No separator found, hard cut by tokens (not ideal but fallback)
-        enc = tiktoken.get_encoding("cl100k_base")
-        tokens = enc.encode(text)
-        for i in range(0, len(tokens), max_tokens - overlap_tokens):
-            chunk_tokens = tokens[i:i + max_tokens]
-            final_chunks.append(enc.decode(chunk_tokens))
-
-    # Recurse on chunks that are still too large
-    resolved_chunks = []
-    for chunk in final_chunks:
-        if get_token_count(chunk) > max_tokens:
-            resolved_chunks.extend(recursive_split(chunk, max_tokens, overlap_tokens))
-        else:
-            resolved_chunks.append(chunk)
-
-    return resolved_chunks
+    return chunks
 
 def index_documents(json_file, rebuild=False):
     if not os.path.exists(json_file):
         print(f"Error: {json_file} not found.")
-        return
+        return 0
 
     with open(json_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
@@ -114,7 +87,7 @@ def index_documents(json_file, rebuild=False):
         url = doc.get("url", "")
         title = doc.get("title", "")
 
-        chunks = recursive_split(content, max_tokens, overlap_tokens)
+        chunks = split_text(content, max_tokens, overlap_tokens)
 
         for i, chunk in enumerate(chunks):
             chunk_id = f"{url}_{i}"
@@ -122,10 +95,14 @@ def index_documents(json_file, rebuild=False):
             all_metadatas.append({"url": url, "title": title, "chunk_id": i})
             all_ids.append(chunk_id)
 
+    if not all_chunks:
+        print("No chunks to index.")
+        return 0
+
     # Gemini Embeddings
     if not GEMINI_API_KEY:
         print("GEMINI_API_KEY not set. Cannot index embeddings.")
-        return
+        return 0
 
     # Chroma can take a list of embeddings. We'll generate them in batches.
     batch_size = 100
@@ -169,11 +146,12 @@ def imt_rag_search(query: str):
     )
 
     formatted_results = []
-    for i in range(len(results['documents'][0])):
-        formatted_results.append({
-            "content": results['documents'][0][i],
-            "score": 1 - results['distances'][0][i], # Approximate score
-            "source": results['metadatas'][0][i]['url']
-        })
+    if results['documents']:
+        for i in range(len(results['documents'][0])):
+            formatted_results.append({
+                "content": results['documents'][0][i],
+                "score": 1 - results['distances'][0][i], # Approximate score
+                "source": results['metadatas'][0][i]['url']
+            })
 
     return formatted_results
