@@ -31,3 +31,7 @@ ENV/
 # Project specific
 chroma_db/
 temp_audio.wav
+*.pyc
+packages/
+.vscode/
+*.zip
