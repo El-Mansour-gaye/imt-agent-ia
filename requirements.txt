@@ -1,6 +1,52 @@
-chainlit>=2.0.0
-redis>=5.0.0
-langfuse>=3.12.0
-python-dotenv==1.0.1
+# === Core Agent & Framework ===
+crewai>=0.51.0
+langchain>=0.3.0
+langchain-openai>=0.1.0
+langchain-google-genai>=1.0.0
+google-generativeai>=0.8.0
+
+# === Backend & RAG ===
+scrapy>=2.11.0
+beautifulsoup4>=4.12.0
+chromadb>=0.5.0
+tiktoken>=0.7.0
+requests>=2.31.0
+
+# === UI & Frontend ===
+chainlit>=1.1.0
 numpy
 soundfile
+reportlab
+SpeechRecognition
+gTTS
+
+# === Memory & Database ===
+redis>=5.0.0
+diskcache>=5.6.0
+
+# === Observability & Tracing ===
+langfuse>=3.12.0
+opentelemetry-api
+opentelemetry-sdk
+
+# === Automation & Actions ===
+playwright>=1.40.0
+sendgrid>=6.10.0
+python-dotenv>=1.0.0
+
+# === Utilities ===
+langdetect>=1.0.0
+pydantic>=2.0.0
+pydantic-core
+aiohttp
+httpx
+tenacity
+typing-extensions
+
+# === Development & Tests ===
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+black==24.1.1
+flake8==7.0.0
+mypy==1.8.0

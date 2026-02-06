@@ -33,6 +33,7 @@ class TestContactForm(unittest.TestCase):
         
         mock_playwright.return_value.__enter__.return_value.chromium.launch.return_value = mock_browser
         mock_browser.new_context.return_value.new_page.return_value = mock_page
+        mock_page.locator.return_value.count.return_value = 1
         
         # Exécuter
         result = fill_contact_form(
@@ -71,12 +72,12 @@ class TestMultilingual(unittest.TestCase):
     def test_french_detection(self):
         """Test détection français"""
         result = detect_lang_and_translate("Bonjour comment ça va")
-        self.assertIn("français", result)
+        self.assertEqual("français", result['detected_language_name'])
     
     def test_english_detection(self):
         """Test détection anglais"""
         result = detect_lang_and_translate("Hello how are you")
-        self.assertIn("traduite", result.lower())
+        self.assertTrue(result['is_translated'])
 
 class TestSecurity(unittest.TestCase):
     

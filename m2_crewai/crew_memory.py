@@ -84,6 +84,24 @@ class VolatileMemoryManager(MemoryManager):
         """Vider la mémoire"""
         self.memory.clear()
         return True
+
+    def save_to_history(self, session_id: str, role: str, content: str):
+        """Simulation d'historique en mémoire volatile"""
+        key = f"history:{session_id}"
+        if key not in self.memory:
+            self.memory[key] = {"value": []}
+        self.memory[key]["value"].append({
+            "role": role,
+            "content": content,
+            "timestamp": datetime.now().isoformat()
+        })
+
+    def get_session_history(self, session_id: str, limit: int = 10) -> List[Dict]:
+        """Récupération de l'historique simulé"""
+        key = f"history:{session_id}"
+        if key not in self.memory:
+            return []
+        return self.memory[key]["value"][-limit:]
     
     def get_stats(self) -> Dict[str, Any]:
         """Statistiques de mémoire"""
@@ -99,33 +117,34 @@ class RedisMemoryManager(MemoryManager):
     
     def __init__(self):
         try:
-            import redis
-            
-            # Configuration Redis
-            self.host = os.getenv("REDIS_HOST", "localhost")
-            self.port = int(os.getenv("REDIS_PORT", 6379))
-            self.password = os.getenv("REDIS_PASSWORD")
-            
-            # Connexion Redis
-            self.redis_client = redis.Redis(
-                host=self.host,
-                port=self.port,
-                password=self.password,
-                decode_responses=True,
-                db=0
-            )
+            from redis_manager import redis_client
+            self.redis_client = redis_client
             
             # Test de connexion
             self.redis_client.ping()
-            print(f"✅ Redis connecté: {self.host}:{self.port}")
+            print(f"✅ Redis (M3) connecté")
             self.available = True
             
         except ImportError:
-            print("⚠️ Redis non installé, fallback mémoire volatile")
+            print("⚠️ redis_manager non disponible, fallback mémoire volatile")
             self.available = False
         except Exception as e:
             print(f"⚠️ Connexion Redis échouée ({e}), fallback mémoire volatile")
             self.available = False
+
+    def save_to_history(self, session_id: str, role: str, content: str):
+        """Sauvegarde un message dans l'historique (compatible redis_manager)"""
+        if not self.available:
+            return
+        from redis_manager import save_message
+        save_message(session_id, role, content)
+
+    def get_session_history(self, session_id: str, limit: int = 10) -> List[Dict]:
+        """Récupère l'historique de session (compatible redis_manager)"""
+        if not self.available:
+            return []
+        from redis_manager import get_last_messages
+        return get_last_messages(session_id, limit)
     
     def store(self, key: str, value: Any, ttl: int = None) -> bool:
         """Stocker une valeur dans Redis"""
