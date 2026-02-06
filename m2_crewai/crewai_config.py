@@ -7,9 +7,8 @@ from typing import Dict, Any, List
 from datetime import datetime
 from uuid import uuid4
 
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import tool
-from langchain_google_genai import ChatGoogleGenerativeAI
 from dotenv import load_dotenv
 
 # Import des modules M1 (simulés si non disponibles)
@@ -51,35 +50,26 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure Gemini avec fallback"""
+    """Configure l'LLM via l'interface native de CrewAI"""
     api_key = os.getenv("GEMINI_API_KEY")
     model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     
     if not api_key:
-        print("⚠️ GEMINI_API_KEY manquante, mode simulation")
-        
-        class MockLLM:
-            def generate_response(self, prompt):
-                return f"[SIMULATION] Réponse à: {prompt[:50]}..."
-        
-        return MockLLM()
+        print("⚠️ GEMINI_API_KEY manquante, mode simulation (certaines actions peuvent échouer)")
+        return None
     
     try:
-        return ChatGoogleGenerativeAI(
-            model=model_name,
-            google_api_key=api_key,
+        # CrewAI 1.x recommande d'utiliser l'objet LLM interne
+        # qui gère mieux LiteLLM et les fallbacks
+        return LLM(
+            model=f"gemini/{model_name}",
+            api_key=api_key,
             temperature=0.7,
-            max_output_tokens=2000,
-            convert_system_message_to_human=True
+            max_tokens=2000
         )
     except Exception as e:
-        print(f"❌ Erreur Gemini: {e}, mode simulation")
-        
-        class FallbackLLM:
-            def generate_response(self, prompt):
-                return f"[FALLBACK] Question: {prompt[:100]}..."
-        
-        return FallbackLLM()
+        print(f"❌ Erreur initialisation LLM: {e}")
+        return None
 
 llm = get_llm()
 

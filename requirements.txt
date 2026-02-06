@@ -33,6 +33,7 @@ opentelemetry-sdk
 playwright>=1.40.0
 sendgrid>=6.10.0
 python-dotenv>=1.0.0
+litellm>=1.40.0
 
 # === Utilities ===
 langdetect>=1.0.0
