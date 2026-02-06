@@ -1,5 +1,5 @@
 
-ANONYMIZED_TELEMETRY=False
+
 scrapy==2.11.2
 beautifulsoup4==4.12.3
 chromadb==0.5.5
@@ -7,3 +7,4 @@ google-generativeai==0.8.3
 tiktoken==0.7.0
 redis==5.1.0
 python-dotenv==1.0.1
+chainlit
