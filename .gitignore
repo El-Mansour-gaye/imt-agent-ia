@@ -35,3 +35,7 @@ temp_audio.wav
 packages/
 .vscode/
 *.zip
+screenshots/
+emails_simulated/
+outputs/
+*.png

@@ -26,12 +26,15 @@ except ImportError:
             "source": "imt.sn/simulation"
         }]
 
-# Import mémoire Redis
+# Import mémoire Redis avec fallback automatique
 try:
-    from .crew_memory import RedisMemoryManager
+    from .crew_memory import RedisMemoryManager, VolatileMemoryManager
     memory_manager = RedisMemoryManager()
-except ImportError:
-    print("⚠️ Redis non disponible, mode mémoire volatile")
+    if not getattr(memory_manager, "available", False):
+        print("⚠️ Redis non disponible (ping échoué), passage en mode mémoire volatile")
+        memory_manager = VolatileMemoryManager()
+except (ImportError, Exception) as e:
+    print(f"⚠️ Erreur chargement Redis: {e}, mode mémoire volatile")
     from .crew_memory import VolatileMemoryManager
     memory_manager = VolatileMemoryManager()
 
@@ -48,8 +51,9 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure Gemini 1.5-pro avec fallback"""
+    """Configure Gemini avec fallback"""
     api_key = os.getenv("GEMINI_API_KEY")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     
     if not api_key:
         print("⚠️ GEMINI_API_KEY manquante, mode simulation")
@@ -62,7 +66,7 @@ def get_llm():
     
     try:
         return ChatGoogleGenerativeAI(
-            model="gemini-pro",
+            model=model_name,
             google_api_key=api_key,
             temperature=0.7,
             max_output_tokens=2000,
@@ -133,12 +137,12 @@ def formulaire_contact_tool(nom: str, email: str, message: str) -> str:
         tracer.start_span("contact_form", {"nom": nom, "email": email})
     
     try:
-        # Import dynamique pour éviter dépendance circulaire
-        from m2_actions.playwright_form import fill_imt_contact_form
-        result = fill_imt_contact_form(nom, email, message)
+        # Utilisation de l'interface unifiée action_tools
+        from m2_actions.action_tools import fill_contact_form
+        result = fill_contact_form(nom=nom, email=email, message=message)
         
         if tracer:
-            tracer.end_span("contact_form", {"success": result.get("status") == "success"})
+            tracer.end_span("contact_form", {"success": result.get("status") in ["success", "simulated"]})
         
         return f"✅ Formulaire soumis: {result}"
     except Exception as e:
@@ -163,11 +167,12 @@ def email_directeur_tool(sujet: str, corps: str) -> str:
         tracer.start_span("director_email", {"sujet": sujet})
     
     try:
-        from m2_actions.email_sender import send_director_email
-        result = send_director_email(sujet, corps)
+        # Utilisation de l'interface unifiée action_tools
+        from m2_actions.action_tools import send_director_email
+        result = send_director_email(sujet=sujet, corps=corps)
         
         if tracer:
-            tracer.end_span("director_email", {"sent": result.get("status") == "sent"})
+            tracer.end_span("director_email", {"sent": result.get("status") in ["sent", "success", "simulated"]})
         
         return f"📧 Email envoyé: {result}"
     except Exception as e:
@@ -286,44 +291,41 @@ class IMTCrew:
         
         # Tâche 2: Planification (Manager)
         planning_task = Task(
-            description="""Analyse les résultats de recherche et planifie les actions nécessaires.
-            
-            
+            description="""Analyse les résultats de recherche fournis par le Researcher et planifie les actions nécessaires pour répondre à la requête utilisateur: '{query}'.
             
             Instructions:
-            1. Évalue si une action est requise (formulaire de contact, email au directeur)
-            2. Si action requise, détermine le type d'action et les données nécessaires
-            3. Prépare un plan d'exécution clair
-            4. Transmet les instructions à l'Actioneer
+            1. Évalue si une action concrète est requise (remplir le formulaire de contact ou envoyer un email au directeur).
+            2. Si une action est requise, détermine précisément le type d'action et extrait les données nécessaires des résultats de recherche ou du contexte.
+            3. Prépare un plan d'exécution clair pour l'Actioneer.
+            4. Si aucune action n'est requise, explique pourquoi la réponse du Researcher est suffisante.
             
             Format de sortie:
             - Évaluation de la demande
-            - Plan d'action (si applicable)
-            - Instructions pour l'Actioneer""",
+            - Plan d'action détaillé (si applicable)
+            - Instructions précises pour l'Actioneer (paramètres à utiliser pour les outils)""",
             agent=self.manager,
-            expected_output="Plan d'action avec instructions détaillées",
+            expected_output="Un plan d'action détaillé incluant les paramètres pour les outils de l'Actioneer",
             context=[research_task],
             output_file="outputs/action_plan.md"
         )
         
         # Tâche 3: Exécution (Actioneer)
         action_task = Task(
-            description="""Exécute les actions planifiées par le Manager.
-            
-            
+            description="""Exécute les actions planifiées par le Manager pour la requête: '{query}'.
             
             Instructions:
-            1. Suis exactement les instructions du Manager
-            2. Utilise les outils appropriés (formulaire, email)
-            3. Fournis une confirmation d'exécution avec preuves
-            4. Signale toute erreur ou difficulté
+            1. Suis rigoureusement le plan d'action et les instructions du Manager.
+            2. Utilise les outils appropriés (formulaire de contact ou email au directeur) avec les paramètres fournis.
+            3. En cas d'informations manquantes pour un outil (ex: email de l'utilisateur), utilise des valeurs par défaut cohérentes ou signale le manque.
+            4. Fournis une confirmation d'exécution détaillée avec les preuves de succès (status, screenshots, etc.).
+            5. Signale toute erreur technique rencontrée lors de l'exécution.
             
             Format de sortie:
-            - Confirmation d'exécution
-            - Résultats/Preuves
-            - Statut final""",
+            - Rapport de confirmation d'exécution
+            - Détails des résultats/preuves fournis par les outils
+            - Statut final de l'opération""",
             agent=self.actioneer,
-            expected_output="Rapport d'exécution avec confirmations",
+            expected_output="Rapport d'exécution complet avec statut de succès ou d'échec et preuves",
             context=[planning_task],
             output_file="outputs/execution_report.md"
         )
