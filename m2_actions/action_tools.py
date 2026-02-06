@@ -14,6 +14,17 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
+# Imports pour permettre le mocking dans les tests
+try:
+    from playwright.sync_api import sync_playwright
+except ImportError:
+    sync_playwright = None
+
+try:
+    from sendgrid import SendGridAPIClient
+except ImportError:
+    SendGridAPIClient = None
+
 # ==================== MODÈLES PYDANTIC ====================
 class ContactFormData(BaseModel):
     """Données pour le formulaire de contact"""
@@ -60,16 +71,11 @@ def fill_contact_form(
     )
     
     try:
-        # Essayer d'importer Playwright
-        try:
-            from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
-            
-            USE_PLAYWRIGHT = True
-        except ImportError:
-            print("⚠️ Playwright non installé, mode simulation")
-            USE_PLAYWRIGHT = False
+        # Essayer d'utiliser Playwright (importé au niveau du module ou mocké)
+        USE_PLAYWRIGHT = (sync_playwright is not None)
         
         if USE_PLAYWRIGHT:
+            from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
             with sync_playwright() as p:
                 # Lancer le navigateur en mode headless (sans interface)
                 browser = p.chromium.launch(
@@ -283,7 +289,7 @@ def send_director_email(
         
         if api_key:
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
             prompt = f"""
             Transforme ce message en email professionnel pour le directeur de l'IMT:
@@ -311,9 +317,8 @@ def send_director_email(
     try:
         # Essayer SendGrid d'abord
         sendgrid_key = os.getenv("SENDGRID_API_KEY")
-        if sendgrid_key:
+        if sendgrid_key and SendGridAPIClient is not None:
             try:
-                from sendgrid import SendGridAPIClient
                 from sendgrid.helpers.mail import Mail, Content
                 
                 # Créer l'email

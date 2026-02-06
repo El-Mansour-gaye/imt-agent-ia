@@ -21,6 +21,10 @@ from analytics import increment_query, save_feedback, export_analytics_csv
 from pdf_generator import generate_reco_pdf
 from voice import stt_from_audio, tts_to_audio
 
+# Intégration M2 - CrewAI & Actions
+from m2_crewai.crewai_config import get_imt_crew
+from m2_actions.action_tools import fill_contact_form, send_director_email
+
 # Pour associer le feedback (pouces) à Langfuse
 try:
     from opentelemetry import trace
@@ -41,19 +45,19 @@ except Exception:
 def create_session_id():
     return f"IMT-{uuid.uuid4().hex[:8]}"
 
-async def call_agent_mock(user_message: str, context: str) -> str:
-    return f"""
-🎓 **Assistant IMT**
+async def call_agent(user_message: str, session_id: str) -> str:
+    """Appel réel à l'agent CrewAI (M2)"""
+    try:
+        crew = get_imt_crew(session_id)
+        # On passe la query à CrewAI (kickoff est synchrone)
+        result = await cl.make_async(crew.kickoff)({"query": user_message})
 
-Votre question :
-> {user_message}
-
-📚 **Contexte pris en compte**
-{context}
-
-ℹ️ Réponse simulée.
-L’agent IA complet sera intégré via CrewAI.
-"""
+        if result.get("success"):
+            return result["response"]
+        else:
+            return f"⚠️ Une erreur est survenue dans l'agent : {result.get('error')}"
+    except Exception as e:
+        return f"❌ Erreur critique lors de l'appel à l'agent : {str(e)}"
 
 async def grok_summarize(conversation: list) -> str:
     return (
@@ -76,10 +80,8 @@ async def handle_agent(session_id: str, user_message: str) -> str:
         summary = await grok_summarize(get_last_messages(session_id, limit=20))
         save_summary(session_id, summary)
 
-    # Contexte à injecter
-    context = build_context(session_id, limit=10)
-
-    return await call_agent_mock(user_message=user_message, context=context)
+    # On délègue à l'agent réel (M2) qui gère son propre contexte RAG
+    return await call_agent(user_message=user_message, session_id=session_id)
 
 # =========================
 # LANGFUSE – ACTIONS
@@ -111,11 +113,11 @@ Posez vos questions sur :
 - l’IMT en général
 """,
         actions=[
-            cl.Action(name="fill_form", value="form", label="📝 Remplir le formulaire"),
-            cl.Action(name="send_email", value="email", label="📧 Écrire au directeur"),
-            cl.Action(name="generate_pdf", value="pdf", label="📄 Générer mon plan IMT"),
-            cl.Action(name="message_vocal", value="voice", label="🎤 Message vocal"),
-            cl.Action(name="export_csv", value="csv", label="📊 Exporter analytics CSV")
+            cl.Action(name="fill_form", value="form", label="📝 Remplir le formulaire", payload={}),
+            cl.Action(name="send_email", value="email", label="📧 Écrire au directeur", payload={}),
+            cl.Action(name="generate_pdf", value="pdf", label="📄 Générer mon plan IMT", payload={}),
+            cl.Action(name="message_vocal", value="voice", label="🎤 Message vocal", payload={}),
+            cl.Action(name="export_csv", value="csv", label="📊 Exporter analytics CSV", payload={})
         ]
     ).send()
 
@@ -140,8 +142,8 @@ async def on_message(message: cl.Message):
     await cl.Message(
         content=response,
         actions=[
-            cl.Action(name="feedback_up", value="1", label="👍"),
-            cl.Action(name="feedback_down", value="-1", label="👎")
+            cl.Action(name="feedback_up", value="1", label="👍", payload={}),
+            cl.Action(name="feedback_down", value="-1", label="👎", payload={})
         ]
     ).send()
 
@@ -149,14 +151,37 @@ async def on_message(message: cl.Message):
 # ACTIONS UI
 # =========================
 @cl.action_callback("fill_form")
-async def fill_form(action):
+async def fill_form_callback(action):
     await handle_action("fill_form")
-    await cl.Message(content="📝 Formulaire IMT (mock)").send()
+    # Pour une démo simple, on utilise des données de test
+    # Dans une version réelle, on pourrait ouvrir un cl.AskUserMessage
+
+    # Run sync function in a thread to avoid blocking
+    result = await cl.make_async(fill_contact_form)(
+        nom="Utilisateur Chainlit",
+        email="user@example.com",
+        message="Demande d'informations via assistant IA"
+    )
+
+    content = f"📝 **Remplissage du formulaire**\nStatut: {result['status']}\nMessage: {result['message']}"
+    elements = []
+    if result.get("screenshot"):
+        elements.append(cl.Image(path=result["screenshot"], name="form_proof", display="inline"))
+
+    await cl.Message(content=content, elements=elements).send()
 
 @cl.action_callback("send_email")
-async def send_email(action):
+async def send_email_callback(action):
     await handle_action("send_email")
-    await cl.Message(content="📧 Email au directeur (mock)").send()
+
+    # Run sync function in a thread to avoid blocking
+    result = await cl.make_async(send_director_email)(
+        sujet="Demande d'information",
+        corps="Un utilisateur souhaite plus d'informations sur l'IMT."
+    )
+
+    content = f"📧 **Envoi d'email**\nStatut: {result['status']}\nMessage: {result['message']}\nMode: {result.get('mode')}"
+    await cl.Message(content=content).send()
 
 @cl.action_callback("generate_pdf")
 async def generate_pdf(action):
