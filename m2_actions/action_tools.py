@@ -200,7 +200,7 @@ def fill_contact_form(
                         "screenshot": str(screenshot_path),
                         "screenshot_after": str(screenshot_after),
                         "timestamp": timestamp,
-                        "data_submitted": data.dict(exclude_none=True),
+                        "data_submitted": data.model_dump(exclude_none=True),
                         "mode": "playwright_real"
                     }
                     
@@ -240,7 +240,7 @@ def fill_contact_form(
             "message": "Formulaire simulé (Playwright non disponible)",
             "simulation_file": str(sim_file),
             "timestamp": timestamp,
-            "data_submitted": data.dict(exclude_none=True),
+            "data_submitted": data.model_dump(exclude_none=True),
             "mode": "simulation"
         }
         

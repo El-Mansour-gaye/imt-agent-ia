@@ -87,10 +87,10 @@ Posez vos questions sur les formations, les frais ou l'admission.
 @cl.on_message
 async def on_message(message: cl.Message):
     session_id = cl.user_session.get("session_id")
-    save_message(session_id, "user", message.content)
+    # Note: La sauvegarde des messages est gérée par l'agent CrewAI (M2)
+    # pour éviter les doublons dans l'historique Redis.
     await cl.Message(content="🤖 Analyse en cours...").send()
     response = await handle_agent(session_id, message.content)
-    save_message(session_id, "assistant", response)
     await cl.Message(content=response).send()
 
 # =========================
