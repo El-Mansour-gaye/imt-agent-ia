@@ -70,14 +70,24 @@ class DirectorEmailGenerator:
         Returns:
             Dict avec subject, body, to_email
         """
-        # Placeholder pour Gemini (si disponible)
+        # Tentative avec Grok (xAI) ou Gemini
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
-                google_api_key=os.getenv("GEMINI_API_KEY"),
-                temperature=0.5
-            )
+            xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+            if xai_api_key:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(
+                    model=os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest"),
+                    api_key=xai_api_key,
+                    base_url="https://api.x.ai/v1",
+                    temperature=0.5
+                )
+            else:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                llm = ChatGoogleGenerativeAI(
+                    model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+                    google_api_key=os.getenv("GEMINI_API_KEY"),
+                    temperature=0.5
+                )
             
             prompt = f"""Tu es un assistant professionnel pour l'IMT de Dakar.
             Génère un email FORMEL ET COURT (max 200 mots) au Directeur IMT basé sur cette demande:
