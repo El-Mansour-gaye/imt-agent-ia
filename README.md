@@ -1,20 +1,67 @@
-Projet IMT Agent IA - Équipe Mansour GAYE, Moustapha DIOP, Chrys YABI
+# IMT Agent IA - Assistant Intelligent pour l'IMT Dakar
 
-# IMT Agent IA
-Agent LLM pour site IMT.sn (Scraping RAG + actions form/email).
+Ce projet est un agent conversationnel intelligent conçu pour l'Institut des Métiers des Télécommunications (IMT) de Dakar. Il combine le Scraping, le RAG (Retrieval-Augmented Generation) et des actions automatisées pour répondre aux questions des étudiants et futurs étudiants.
 
-## Setup
-1. `git clone https://github.com/.../imt-agent-ia`
-2. `cp .env.example .env` → ajoutez GEMINI_API_KEY etc.
-3. `docker-compose up -d` (Redis)
-4. `pip install -r requirements.txt`
-5. `chainlit run app.py`
+## 🚀 Architecture Globale
 
-## Workflow Git (OBLIGATOIRE)
-- Travail sur **feature/m1-scraping** etc. (votre nom).
-- Commits: "M1: Add Scrapy spider".
-- PR vers **develop** (review + merge).
-- **NE JAMMAIS** push direct main/develop.
-- Pull develop souvent !
+- **Backend Data Pipeline (M1)**: Scraping du site imt.sn avec Scrapy, indexation dans ChromaDB avec Gemini Embeddings.
+- **Agent Core & Actions (M2)**: Orchestration CrewAI avec 3 agents (Researcher, Actioneer, Manager). Outils d'action avec Playwright (formulaires) et SMTP/SendGrid (emails).
+- **UI & Observability (M3)**: Interface web Chainlit, mémoire persistante Redis, et monitoring complet avec Langfuse.
 
-Branches: main=final, develop=dev.
+## 🛠️ Installation et Setup
+
+### 1. Cloner le repository
+```bash
+git clone https://github.com/votre-equipe/imt-agent-ia.git
+cd imt-agent-ia
+```
+
+### 2. Configuration de l'environnement
+```bash
+cp .env.example .env
+# Remplissez les clés nécessaires, notamment GEMINI_API_KEY
+```
+
+### 3. Lancer les services (Docker)
+```bash
+docker-compose up -d
+```
+
+### 4. Installer les dépendances
+```bash
+pip install -r requirements.txt
+playwright install chromium
+```
+
+### 5. Préparer les données (Optionnel si ChromaDB déjà fourni)
+```bash
+# Scraper le site
+python scrape_imt.py
+# Indexer les documents
+python index.py
+```
+
+### 6. Lancer l'application
+```bash
+chainlit run app.py
+```
+
+## 🤖 Fonctionnalités
+
+- **RAG Multi-sources**: Réponses précises basées sur le contenu réel du site imt.sn.
+- **Actions Intelligentes**:
+  - Remplissage automatique de formulaire de contact.
+  - Envoi d'emails formels au directeur.
+- **Mémoire & Contexte**: Conservation de l'historique de conversation via Redis.
+- **Observabilité**: Tracing complet des appels LLM et des actions via Langfuse.
+- **Multimodalité**: Support des messages vocaux (STT/TTS).
+- **Génération de PDF**: Recommandations de formation personnalisées en format PDF.
+
+## 👥 Équipe
+
+- **Membre 1**: Scraping, RAG, VectorDB
+- **Membre 2**: CrewAI setup, Outils Actions
+- **Membre 3**: Chainlit UI, Redis, Langfuse
+
+---
+*Projet réalisé dans le cadre de la formation IMT Agent IA.*
