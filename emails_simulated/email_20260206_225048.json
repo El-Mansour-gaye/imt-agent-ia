@@ -1,8 +1,0 @@
-{
-  "timestamp": "2026-02-06T22:50:48.142051",
-  "to": "directeur@imt.sn",
-  "subject": "Test",
-  "body": "Test",
-  "status": "simulated",
-  "note": "Email simulé - Configurez SendGrid ou Gmail SMTP pour l'envoi réel"
-}
