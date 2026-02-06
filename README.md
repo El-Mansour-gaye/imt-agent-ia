@@ -22,10 +22,12 @@ cp .env.example .env
 # Remplissez les clés nécessaires, notamment GEMINI_API_KEY
 ```
 
-### 3. Lancer les services (Docker)
+### 3. Lancer les services (Docker - Optionnel)
+Si vous souhaitez utiliser Redis pour une mémoire persistante :
 ```bash
 docker-compose up -d
 ```
+*Note : Si Redis n'est pas lancé, l'application basculera automatiquement en mode **mémoire volatile (RAM)**.*
 
 ### 4. Installer les dépendances
 ```bash
@@ -45,6 +47,18 @@ python index.py
 ```bash
 chainlit run app.py
 ```
+
+### 🧪 Tests locaux (sans Docker)
+Pour vérifier que tout fonctionne correctement sans Docker :
+1. Assurez-vous que votre `.env` est configuré (notamment `GEMINI_API_KEY`).
+2. Installez les dépendances : `pip install -r requirements.txt`.
+3. Installez Playwright : `playwright install chromium`.
+4. Lancez les tests automatisés :
+```bash
+export PYTHONPATH=$PYTHONPATH:.
+pytest tests/m2_tests/test_actions.py
+```
+5. Lancez l'interface : `chainlit run app.py`. L'application vous informera que Redis est absent et qu'elle utilise la mémoire volatile.
 
 ## 🤖 Fonctionnalités
 
