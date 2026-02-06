@@ -34,7 +34,6 @@ try:
         memory_manager = VolatileMemoryManager()
 except (ImportError, Exception) as e:
     print(f"⚠️ Erreur chargement Redis: {e}, mode mémoire volatile")
-    from .crew_memory import VolatileMemoryManager
     memory_manager = VolatileMemoryManager()
 
 # Import tracing Langfuse
@@ -50,26 +49,41 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI"""
+    """Configure l'LLM via l'interface native de CrewAI avec fallback robuste"""
     api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
     
     if not api_key:
         print("⚠️ GEMINI_API_KEY manquante, mode simulation (certaines actions peuvent échouer)")
         return None
     
+    # On définit une liste de modèles de repli au cas où le modèle spécifié n'existe pas
+    # Priorité aux modèles qui fonctionnent avec cette clé API (vérifiés par test)
+    fallbacks = [f"gemini/{model_name}", "gemini/gemini-flash-latest", "gemini/gemini-2.0-flash", "gemini/gemini-pro"]
+
+    # Éliminer les doublons tout en gardant l'ordre
+    unique_fallbacks = []
+    for f in fallbacks:
+        if f not in unique_fallbacks:
+            unique_fallbacks.append(f)
+
     try:
-        # CrewAI 1.x recommande d'utiliser l'objet LLM interne
-        # qui gère mieux LiteLLM et les fallbacks
+        # CrewAI LLM supporte nativement une liste de modèles pour le fallback
+        # On utilise le premier modèle comme modèle principal et les autres en fallback
         return LLM(
-            model=f"gemini/{model_name}",
+            model=unique_fallbacks[0],
+            fallback_models=unique_fallbacks[1:],
             api_key=api_key,
             temperature=0.7,
             max_tokens=2000
         )
     except Exception as e:
         print(f"❌ Erreur initialisation LLM: {e}")
-        return None
+        # Fallback de dernier recours très simple
+        try:
+            return LLM(model="gemini/gemini-flash-latest", api_key=api_key)
+        except:
+            return None
 
 llm = get_llm()
 
