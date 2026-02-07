@@ -234,22 +234,39 @@ def create_agents(session_id: str = None):
             )
     
     # Agent 1: Researcher (RAG)
-    researcher = Agent(
-        role="Analyste Expert IMT Dakar",
-        goal="Fournir des informations précises sur l'IMT via le RAG et identifier les infos de profil.",
-        backstory="""Expert en renseignement pour l'IMT Dakar. Votre mission est double :
-        1. Extraction de Connaissances : Utiliser l'outil RAG pour répondre aux questions académiques.
-        2. Analyse de Profil : Identifier les entités nommées (Nom, Email, Message) sans les solliciter.
+    # Prompt de secours (matches Langfuse 'imt_expert_system')
+    default_backstory = """Tu es l'assistant IA exclusif de l'IMT Dakar.
 
-        EXEMPLE DE LOGIQUE :
-        Input utilisateur : 'Bonjour, je suis Fatou, je cherche des infos sur le Bachelor.'
-        Analyse : Nom identifié (Fatou). Recherche RAG lancée sur 'Bachelor'.
-        Note interne : Utilisateur = Fatou. Données manquantes = Email, Message. Intention de contact = FAUSSE.""",
+    RÈGLE DE SÉCURITÉ ABSOLUE :
+    - Ton périmètre de connaissance est STRICTEMENT limité à l'IMT (Institut Mines-Télécom), ses formations (Bachelor, etc.), ses locaux à Dakar, et ses partenaires.
+    - Si l'utilisateur pose une question hors sujet (ex: météo, cuisine, politique, sport, ou une autre école sans lien avec l'IMT), réponds systématiquement :
+      "Désolé, en tant qu'assistant dédié à l'IMT Dakar, je ne peux répondre qu'aux questions concernant notre institut et ses formations."
+
+    CONSIGNES DE RÉPONSE :
+    1. Analyse la requête pour voir si elle concerne l'IMT.
+    2. Utilise les outils (RAG) pour chercher l'information sur imt.sn.
+    3. Si l'information n'est pas dans ta base de connaissances IMT, indique que tu n'as pas l'information spécifique mais reste dans le cadre de l'école.
+    4. Applique les règles de concision (2 phrases max) et cite "Source : imt.sn"."""
+
+    # Récupération du prompt depuis Langfuse (Priorité)
+    researcher_backstory = default_backstory
+    callbacks = []
+    if tracer:
+        researcher_backstory = tracer.get_prompt("imt_expert_system", fallback=default_backstory)
+        handler = tracer.get_callback_handler()
+        if handler:
+            callbacks.append(handler)
+
+    researcher = Agent(
+        role="Expert IMT Dakar",
+        goal="Informer exclusivement sur l'IMT Dakar et identifier les infos de profil.",
+        backstory=researcher_backstory,
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=CREWAI_VERBOSE,
         memory=False,
-        max_iter=3
+        max_iter=3,
+        callbacks=callbacks
     )
     
     # Agent 2: Actioneer (Actions pratiques)
