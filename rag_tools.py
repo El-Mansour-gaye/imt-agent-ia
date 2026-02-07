@@ -77,8 +77,10 @@ def index_documents(json_file, rebuild=False):
     all_metadatas = []
     all_ids = []
 
-    max_tokens = 512
-    overlap_tokens = int(max_tokens * 0.2)
+    # Flexible chunking parameters via ENV
+    max_tokens = int(os.getenv("RAG_CHUNK_SIZE", 512))
+    overlap_ratio = float(os.getenv("RAG_CHUNK_OVERLAP_RATIO", 0.2))
+    overlap_tokens = int(max_tokens * overlap_ratio)
 
     for doc in data:
         content = doc.get("content", "")

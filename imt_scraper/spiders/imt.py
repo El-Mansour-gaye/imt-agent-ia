@@ -6,7 +6,7 @@ from scrapy.http import TextResponse
 
 class ImtSpider(scrapy.Spider):
     name = "imt"
-    allowed_domains = ["www.imt.sn"]
+    allowed_domains = ["imt.sn", "www.imt.sn"]
     start_urls = ["https://www.imt.sn/"]
 
     def parse(self, response):
@@ -19,7 +19,19 @@ class ImtSpider(scrapy.Spider):
         item = ImtPage()
         item["url"] = response.url
         item["title"] = response.xpath("//title/text()").get()
-        item["content"] = response.body.decode(response.encoding, errors='ignore')
+
+        # Clean text extraction with BeautifulSoup
+        soup = BeautifulSoup(response.body, "html.parser")
+        # Remove script and style elements
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
+
+        # Get text, joining with spaces and cleaning up whitespace
+        clean_text = soup.get_text(separator=" ")
+        lines = (line.strip() for line in clean_text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        item["content"] = "\n".join(chunk for chunk in chunks if chunk)
+
         item["section"] = self.get_section(response.url)
         item["links"] = [response.urljoin(link) for link in response.xpath("//a/@href").getall()]
 
