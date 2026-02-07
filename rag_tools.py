@@ -3,7 +3,8 @@ import os
 import json
 import tiktoken
 import chromadb
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # Suppress ChromaDB telemetry
@@ -13,9 +14,6 @@ load_dotenv()
 
 # Configure Gemini
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-
 CHROMA_PATH = os.getenv("CHROMA_PATH", "./chroma_db")
 
 def get_token_count(text, model="cl100k_base"):
@@ -65,15 +63,15 @@ def index_documents(json_file, rebuild=False):
         data = json.load(f)
 
     os.makedirs(CHROMA_PATH, exist_ok=True)
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
+    client_chroma = chromadb.PersistentClient(path=CHROMA_PATH)
 
     if rebuild:
         try:
-            client.delete_collection("imt_docs")
+            client_chroma.delete_collection("imt_docs")
         except:
             pass
 
-    collection = client.get_or_create_collection(name="imt_docs")
+    collection = client_chroma.get_or_create_collection(name="imt_docs")
 
     all_chunks = []
     all_metadatas = []
@@ -104,6 +102,8 @@ def index_documents(json_file, rebuild=False):
         print("GEMINI_API_KEY not set. Cannot index embeddings.")
         return 0
 
+    client_genai = genai.Client(api_key=GEMINI_API_KEY)
+
     # Chroma can take a list of embeddings. We'll generate them in batches.
     batch_size = 100
     for i in range(0, len(all_chunks), batch_size):
@@ -111,34 +111,46 @@ def index_documents(json_file, rebuild=False):
         batch_metadatas = all_metadatas[i:i+batch_size]
         batch_ids = all_ids[i:i+batch_size]
 
-        result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=batch_chunks,
-            task_type="retrieval_document"
-        )
-        embeddings = result['embedding']
+        try:
+            result = client_genai.models.embed_content(
+                model="embedding-001",
+                contents=batch_chunks,
+                config=types.EmbedContentConfig(task_type="RETRIEVAL_DOCUMENT")
+            )
+            embeddings = [e.values for e in result.embeddings]
 
-        collection.add(
-            embeddings=embeddings,
-            documents=batch_chunks,
-            metadatas=batch_metadatas,
-            ids=batch_ids
-        )
+            collection.add(
+                embeddings=embeddings,
+                documents=batch_chunks,
+                metadatas=batch_metadatas,
+                ids=batch_ids
+            )
+        except Exception as e:
+            print(f"Error indexing batch starting at {i}: {e}")
+            continue
 
     print(f"Indexed {len(all_chunks)} chunks in ChromaDB")
     return len(all_chunks)
 
 def imt_rag_search(query: str):
-    client = chromadb.PersistentClient(path=CHROMA_PATH)
-    collection = client.get_collection(name="imt_docs")
+    client_chroma = chromadb.PersistentClient(path=CHROMA_PATH)
+    collection = client_chroma.get_collection(name="imt_docs")
+
+    # Gemini Embeddings
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+    if not GEMINI_API_KEY:
+        print("GEMINI_API_KEY not set.")
+        return []
+
+    client_genai = genai.Client(api_key=GEMINI_API_KEY)
 
     # Embed the query
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=query,
-        task_type="retrieval_query"
+    result = client_genai.models.embed_content(
+        model="embedding-001",
+        contents=query,
+        config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
     )
-    query_embedding = result['embedding']
+    query_embedding = result.embeddings[0].values
 
     results = collection.query(
         query_embeddings=[query_embedding],

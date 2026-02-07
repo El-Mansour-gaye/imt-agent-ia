@@ -5,6 +5,7 @@ langchain>=0.3.0
 langchain-openai>=0.1.0
 langchain-google-genai>=1.0.0
 google-generativeai>=0.8.0
+google-genai
 
 # === Backend & RAG ===
 scrapy>=2.11.0
