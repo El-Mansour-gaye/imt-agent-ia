@@ -109,7 +109,7 @@ class DirectorEmailGenerator:
             response = litellm.completion(
                 model=primary,
                 messages=[{"role": "user", "content": prompt}],
-                fallback_models=fallbacks,
+                fallbacks=fallbacks,
                 temperature=0.5
             )
             email_content = response.choices[0].message.content

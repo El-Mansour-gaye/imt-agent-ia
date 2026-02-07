@@ -49,29 +49,30 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI (Groq > Grok > Gemini)"""
+    """Configure l'LLM via l'interface native de CrewAI (Groq > Gemini > Grok)"""
     groq_api_key = os.getenv("GROQ_API_KEY")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
 
-    # Nettoyage des clés au cas où
+    # Nettoyage des clés
     if groq_api_key: groq_api_key = groq_api_key.strip().lstrip('=')
-    if xai_api_key: xai_api_key = xai_api_key.strip().lstrip('=')
     if gemini_api_key: gemini_api_key = gemini_api_key.strip().lstrip('=')
+    if xai_api_key: xai_api_key = xai_api_key.strip().lstrip('=')
 
-    # Priorité 1: GROQ (Demande explicite de l'utilisateur)
+    # Priorité 1: GROQ
     if groq_api_key:
         model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
         print(f"🚀 Configuration GROQ ({model_name})")
 
+        # Fallbacks (Utilisation du paramètre 'fallbacks' pour LiteLLM via CrewAI)
         fallbacks = []
-        if xai_api_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
         if gemini_api_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
+        if xai_api_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
 
         try:
             return LLM(
                 model=f"groq/{model_name.replace('groq/', '')}",
-                fallback_models=fallbacks,
+                fallbacks=fallbacks,
                 api_key=groq_api_key,
                 temperature=0.4,
                 max_tokens=2000
@@ -79,7 +80,7 @@ def get_llm():
         except Exception as e:
             print(f"⚠️ Erreur initialisation GROQ: {e}")
 
-    # Priorité 2: Gemini (Pour stabilité si Groq absent)
+    # Priorité 2: Gemini
     if gemini_api_key:
         model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
         if model_name.startswith("gemini/"):
@@ -88,18 +89,13 @@ def get_llm():
         print(f"🪄 Configuration Gemini ({model_name})")
 
         fallbacks = []
-        if xai_api_key:
-            grok_model = os.getenv("GROK_MODEL", "grok-2-latest").replace("xai/", "")
-            fallbacks.append(f"xai/{grok_model}")
-
-        for g_model in ["gemini-2.0-flash", "gemini-2.0-flash-lite"]:
-            if g_model != model_name:
-                fallbacks.append(f"gemini/{g_model}")
+        if groq_api_key: fallbacks.append(f"groq/{os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile').replace('groq/', '')}")
+        if xai_api_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
 
         try:
             return LLM(
                 model=f"gemini/{model_name}",
-                fallback_models=fallbacks,
+                fallbacks=fallbacks,
                 api_key=gemini_api_key,
                 temperature=0.4,
                 max_tokens=2000

@@ -246,16 +246,10 @@ class MultilingualProcessor:
             gemini_key = os.getenv("GEMINI_API_KEY")
             xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
             
-            # Nettoyage et injection
-            if groq_key:
-                groq_key = groq_key.strip().lstrip('=')
-                os.environ["GROQ_API_KEY"] = groq_key
-            if xai_key:
-                xai_key = xai_key.strip().lstrip('=')
-                os.environ["XAI_API_KEY"] = xai_key
-            if gemini_key:
-                gemini_key = gemini_key.strip().lstrip('=')
-                os.environ["GEMINI_API_KEY"] = gemini_key
+            # Injection
+            if groq_key: os.environ["GROQ_API_KEY"] = groq_key.strip().lstrip('=')
+            if gemini_key: os.environ["GEMINI_API_KEY"] = gemini_key.strip().lstrip('=')
+            if xai_key: os.environ["XAI_API_KEY"] = xai_key.strip().lstrip('=')
 
             if not any([groq_key, gemini_key, xai_key]):
                 return self._fallback_translation(text, target_lang)
@@ -265,29 +259,23 @@ class MultilingualProcessor:
             
             prompt = f"Traduis ce texte en {target_name}. Conserve le sens exact.\n\nTexte: {text}\n\nTraduction:"
             
-            # Définir le modèle primaire et fallbacks (Priorité Groq)
+            # Définir le modèle primaire et fallbacks
             if groq_key:
-                model_name = os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
-                model = f"groq/{model_name.replace('groq/', '')}"
-                fallbacks = []
-                if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
-            elif xai_key:
-                model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
-                model = f"xai/{model_name.replace('xai/', '')}"
+                model = f"groq/{os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile').replace('groq/', '')}"
                 fallbacks = []
                 if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
             elif gemini_key:
-                model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-                model = f"gemini/{model_name.replace('gemini/', '')}"
+                model = f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}"
                 fallbacks = ["gemini/gemini-2.0-flash"]
             else:
-                return self._fallback_translation(text, target_lang)
+                model = f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}"
+                fallbacks = []
             
             # Utiliser litellm pour la complétion avec fallbacks
             response = litellm.completion(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
-                fallback_models=fallbacks,
+                fallbacks=fallbacks,
                 temperature=0.3
             )
             return response.choices[0].message.content.strip()
