@@ -264,7 +264,7 @@ class IMTCrew:
             process=Process.sequential,
             verbose=True,
             memory=False,
-            full_output=True
+            full_output=False
         )
         
         # Démarrer le trace Langfuse
@@ -276,70 +276,53 @@ class IMTCrew:
         
         # Tâche 1: Recherche (Researcher)
         research_task = Task(
-            description="""Analyse la requête utilisateur et recherche des informations précises.
+            description="""Analyse la requête utilisateur et recherche des informations précises sur l'IMT.
             
             Requête: {query}
             
             {context}
             
             Instructions:
-            1. Identifie le type d'information demandée (frais, inscriptions, contacts, formations)
-            2. Utilise l'outil de recherche RAG pour obtenir des informations fiables
-            3. Structure la réponse de manière claire avec sources
-            4. Identifie si une action est nécessaire (formulaire, email)
-            
-            Format de sortie:
-            - Titre de la section
-            - Informations principales
-            - Sources/citations
-            - Actions recommandées (si applicable)""",
+            1. Utilise l'outil de recherche RAG pour obtenir des informations fiables.
+            2. Si la requête est une simple salutation ou ne nécessite pas de recherche technique, fournis une réponse amicale de base.
+            3. Structure les informations trouvées de manière claire.
+            4. Note si l'utilisateur semble vouloir effectuer une action (contact, email).""",
             agent=self.researcher,
-            expected_output="Informations structurées avec sources et recommandations d'action",
+            expected_output="Informations structurées sur l'IMT ou réponse initiale à la requête",
             output_file="outputs/research_result.md"
         )
         
-        # Tâche 2: Planification (Manager)
-        planning_task = Task(
-            description="""Analyse les résultats de recherche fournis par le Researcher et planifie les actions nécessaires pour répondre à la requête utilisateur: '{query}'.
-            
-            Instructions:
-            1. Évalue si une action concrète est requise (remplir le formulaire de contact ou envoyer un email au directeur).
-            2. Si une action est requise, détermine précisément le type d'action et extrait les données nécessaires des résultats de recherche ou du contexte.
-            3. Prépare un plan d'exécution clair pour l'Actioneer.
-            4. Si aucune action n'est requise, explique pourquoi la réponse du Researcher est suffisante.
-            
-            Format de sortie:
-            - Évaluation de la demande
-            - Plan d'action détaillé (si applicable)
-            - Instructions précises pour l'Actioneer (paramètres à utiliser pour les outils)""",
-            agent=self.manager,
-            expected_output="Un plan d'action détaillé incluant les paramètres pour les outils de l'Actioneer",
-            context=[research_task],
-            output_file="outputs/action_plan.md"
-        )
-        
-        # Tâche 3: Exécution (Actioneer)
+        # Tâche 2: Exécution d'Actions (Actioneer)
         action_task = Task(
-            description="""Exécute les actions planifiées par le Manager pour la requête: '{query}'.
+            description="""Détermine si une action automatisée est nécessaire pour la requête: '{query}' en te basant sur l'analyse du Researcher.
             
             Instructions:
-            1. Suis rigoureusement le plan d'action et les instructions du Manager.
-            2. Utilise les outils appropriés (formulaire de contact ou email au directeur) avec les paramètres fournis.
-            3. En cas d'informations manquantes pour un outil (ex: email de l'utilisateur), utilise des valeurs par défaut cohérentes ou signale le manque.
-            4. Fournis une confirmation d'exécution détaillée avec les preuves de succès (status, screenshots, etc.).
-            5. Signale toute erreur technique rencontrée lors de l'exécution.
-            
-            Format de sortie:
-            - Rapport de confirmation d'exécution
-            - Détails des résultats/preuves fournis par les outils
-            - Statut final de l'opération""",
+            1. SI ET SEULEMENT SI l'utilisateur demande explicitement de contacter l'IMT ou d'écrire au directeur, utilise l'outil approprié.
+            2. Si aucune action n'est demandée (ex: simple question, salutation), ne fais rien et indique "Aucune action requise".
+            3. Ne simule jamais d'outils inexistants.
+            4. En cas d'action, fournis le statut et les preuves.""",
             agent=self.actioneer,
-            expected_output="Rapport d'exécution complet avec statut de succès ou d'échec et preuves",
-            context=[planning_task],
+            expected_output="Rapport d'exécution d'action ou confirmation qu'aucune action n'était nécessaire",
+            context=[research_task],
             output_file="outputs/execution_report.md"
         )
+
+        # Tâche 3: Synthèse Finale (Manager)
+        synthesis_task = Task(
+            description="""Produis la réponse finale destinée à l'utilisateur pour sa requête: '{query}'.
+            
+            Instructions:
+            1. Synthétise les informations du Researcher et les résultats de l'Actioneer.
+            2. Rédige une réponse POLIE, CHALEUREUSE et COMPLÈTE en français.
+            3. Si une action a été effectuée, confirme-le à l'utilisateur.
+            4. Si aucune information n'a été trouvée, suggère à l'utilisateur d'utiliser le formulaire de contact.
+            5. La réponse doit être directement adressée à l'utilisateur, sans métadonnées techniques.""",
+            agent=self.manager,
+            expected_output="Une réponse conversationnelle finale, amicale et informative en français",
+            context=[research_task, action_task]
+        )
         
-        return [research_task, planning_task, action_task]
+        return [research_task, action_task, synthesis_task]
     
     def kickoff(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
