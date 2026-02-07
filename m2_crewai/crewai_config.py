@@ -11,6 +11,9 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import tool
 from dotenv import load_dotenv
 
+# Intégration Multilingue
+from m2_bonus.multilingual import detect_lang_and_translate
+
 # Import logger centralisé
 try:
     from logger import log_info, log_warn, log_error, log_important
@@ -296,11 +299,14 @@ def create_agents(session_id: str = None):
         3. PAS DE REDIRECTION : INTERDICTION de dire 'visitez notre site' ou 'allez sur imt.sn'. L'utilisateur y est déjà.
         4. DÉCLENCHEMENT OUTILS : Si msg >= 3, dites : 'Vous pouvez contacter le directeur/remplir le formulaire vous-même sur le site ou je peux m'en charger pour vous ici.'
         5. COLLECTE DE DONNÉES : Ne demandez AUCUNE info (Nom/Email) avant que l'utilisateur n'ait dit 'Oui' ou 'Je veux bien' à votre proposition d'aide.
+        6. MULTILINGUE : Vous devez impérativement répondre dans la langue détectée de l'utilisateur (Français, Anglais ou Wolof).
 
         EXEMPLES DE RÉPONSES (FEW-SHOT) :
-        - Utilisateur : 'Où est l'école ?' -> IA : 'L'IMT Dakar est situé au Point E. C’est le premier groupe public d’écoles d’ingénieurs français au Sénégal.'
-        - Utilisateur (si msg >= 3) : 'Quels sont les frais ?' -> IA : 'Les frais varient selon le cursus, comptez environ X FCFA par an. Vous pouvez contacter le directeur vous-même sur le site ou je peux m'en charger ici pour vous.'
-        - Utilisateur (avec intention) : 'Ok, fais-le pour moi.' -> IA : 'C'est entendu. Pour procéder, j'ai besoin de votre nom, votre email et votre message.'""",
+        - FR : 'Où est l'école ?' -> 'L'IMT Dakar est situé au Point E. C’est le premier groupe public d’écoles d’ingénieurs français au Sénégal.'
+        - EN : 'Where is the school?' -> 'IMT Dakar is located at Point E. It is the first public group of French engineering schools in Senegal.'
+        - WO : 'Fañ la école bi nekk?' -> 'IMT Dakar mi ngi nekk ci Point E. Mooy goornemant bu jëkk bu ay ekoolu injénieru fofou ca France nekk fii ci Sénégal.'
+        - Utilisateur (si msg >= 3) : 'Quels sont les frais ?' -> 'Les frais varient selon le cursus, comptez environ X FCFA par an. Vous pouvez contacter le directeur vous-même sur le site ou je peux m'en charger ici pour vous.'
+        - Utilisateur (avec intention) : 'Ok, fais-le pour moi.' -> 'C'est entendu. Pour procéder, j'ai besoin de votre nom, votre email et votre message.'""",
         llm=llm,
         verbose=CREWAI_VERBOSE,
         memory=False,
@@ -371,7 +377,10 @@ class IMTCrew:
 
         # Tâche 3: Interaction Utilisateur & Synthèse
         synthesis_task = Task(
-            description="""Synthèse finale pour: '{query}'.
+            description="""Synthèse finale pour: '{original_query}'.
+
+            LANGUE DE RÉPONSE OBLIGATOIRE : {detected_lang_name}
+            (Vous DEVEZ répondre impérativement en {detected_lang_name}).
             
             COMPTEUR DE MESSAGES : {user_messages_count}
 
@@ -399,6 +408,19 @@ class IMTCrew:
             Dict avec résultats complets
         """
         query = inputs.get("query", "")
+
+        # --- DÉTECTION ET TRADUCTION DE LANGUE ---
+        lang_res = detect_lang_and_translate(query)
+        detected_lang = lang_res.get('detected_language', 'fr')
+        detected_lang_name = lang_res.get('detected_language_name', 'français')
+        query_translated = lang_res.get('translated_text', query)
+        is_translated = lang_res.get('is_translated', False)
+
+        if is_translated:
+            log_info(f"🌐 Langue détectée: {detected_lang_name} ({detected_lang}). Traduction interne utilisée.")
+        else:
+            log_info(f"🌐 Langue détectée: {detected_lang_name} ({detected_lang})")
+        # ----------------------------------------
         
         # Sauvegarder la requête dans l'historique
         memory_manager.save_to_history(
@@ -413,6 +435,12 @@ class IMTCrew:
         
         # Ajouter le contexte à la requête (toujours fournir une valeur)
         inputs_with_context = inputs.copy()
+
+        # Utiliser la version traduite pour la recherche et les actions
+        inputs_with_context["query"] = query_translated
+        inputs_with_context["original_query"] = query
+        inputs_with_context["detected_lang_name"] = detected_lang_name
+
         inputs_with_context["context"] = self.context if self.context else ""
         inputs_with_context["user_messages_count"] = user_messages_count
         

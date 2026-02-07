@@ -35,7 +35,11 @@ WOLOF_KEYWORDS = {
     'dakar': 'dakar',
     'mangi': 'je veux',
     'xam': 'savoir',
-    'yi': 'les'
+    'yi': 'les',
+    'fañ': 'où',
+    'lan': 'quoi',
+    'fii': 'ici',
+    'nekk': 'être'
 }
 
 
