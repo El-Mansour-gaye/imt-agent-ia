@@ -288,6 +288,14 @@ def send_director_email(
         gemini_key = os.getenv("GEMINI_API_KEY")
         xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
         
+        # Nettoyage des clés et mise à jour environnement pour litellm
+        if xai_key:
+            xai_key = xai_key.strip().lstrip('=')
+            os.environ["XAI_API_KEY"] = xai_key
+        if gemini_key:
+            gemini_key = gemini_key.strip().lstrip('=')
+            os.environ["GEMINI_API_KEY"] = gemini_key
+
         if xai_key:
             model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
             primary = f"xai/{model_name.replace('xai/', '')}"
