@@ -267,12 +267,14 @@ class MultilingualProcessor:
                 model = f"xai/{model_name.replace('xai/', '')}"
                 fallbacks = []
                 if gemini_key:
-                    gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-                    fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
+                    fallbacks.append("gemini/gemini-flash-latest")
+                    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+                    if "gemini-flash-latest" not in gemini_model:
+                        fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
             elif gemini_key:
-                model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
                 model = f"gemini/{model_name.replace('gemini/', '')}"
-                fallbacks = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
+                fallbacks = ["gemini/gemini-2.0-flash"]
             else:
                 return self._fallback_translation(text, target_lang)
             

@@ -49,7 +49,7 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI (Grok par défaut si dispo, sinon Gemini)"""
+    """Configure l'LLM via l'interface native de CrewAI (Gemini par défaut pour stabilité, Grok dispo)"""
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
 
@@ -59,45 +59,33 @@ def get_llm():
     if gemini_api_key:
         gemini_api_key = gemini_api_key.strip().lstrip('=')
 
-    # Construction de la liste de modèles et fallbacks
-    # Priorité à Grok (xAI) comme demandé par l'utilisateur
-    if xai_api_key:
-        model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
-        if model_name.startswith("xai/"):
-            model_name = model_name.replace("xai/", "")
-
-        primary = f"xai/{model_name}"
-
-        # Fallbacks
-        fallbacks = []
-        if gemini_api_key:
-            gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            if gemini_model.startswith("gemini/"):
-                gemini_model = gemini_model.replace("gemini/", "")
-            fallbacks.append(f"gemini/{gemini_model}")
-
-        print(f"🚀 Configuration Grok ({model_name}) - Fallback Gemini: {bool(gemini_api_key)}")
-        try:
-            return LLM(
-                model=primary,
-                fallback_models=fallbacks,
-                api_key=xai_api_key,
-                temperature=0.4,
-                max_tokens=2000
-            )
-        except Exception as e:
-            print(f"⚠️ Erreur initialisation Grok: {e}")
+    # Note: L'utilisateur a demandé Grok, mais son compte manque de crédits (403).
+    # On utilise donc Gemini (flash-latest) comme moteur principal pour garantir le service,
+    # tout en gardant Grok en option si configuré.
 
     if gemini_api_key:
-        # Gemini si Grok non dispo
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # On utilise gemini-flash-latest par défaut pour la fiabilité des quotas
+        model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
         if model_name.startswith("gemini/"):
             model_name = model_name.replace("gemini/", "")
 
-        print(f"🪄 Configuration Gemini ({model_name}) par défaut")
+        print(f"🪄 Configuration Gemini ({model_name})")
+
+        # On ajoute Grok en fallback au cas où l'utilisateur ajoute des crédits
+        fallbacks = []
+        if xai_api_key:
+            grok_model = os.getenv("GROK_MODEL", "grok-2-latest").replace("xai/", "")
+            fallbacks.append(f"xai/{grok_model}")
+
+        # Autres fallbacks Gemini
+        for g_model in ["gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+            if g_model != model_name:
+                fallbacks.append(f"gemini/{g_model}")
+
         try:
             return LLM(
                 model=f"gemini/{model_name}",
+                fallback_models=fallbacks,
                 api_key=gemini_api_key,
                 temperature=0.4,
                 max_tokens=2000
