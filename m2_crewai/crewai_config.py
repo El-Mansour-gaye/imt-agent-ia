@@ -11,12 +11,21 @@ from crewai import Agent, Task, Crew, Process, LLM
 from crewai.tools import tool
 from dotenv import load_dotenv
 
+# Import logger centralisé
+try:
+    from logger import log_info, log_warn, log_error, log_important
+except ImportError:
+    def log_info(m): pass
+    def log_warn(m): print(m)
+    def log_error(m): print(m)
+    def log_important(m): print(m)
+
 # Import des modules M1 (simulés si non disponibles)
 try:
     from rag_tools import imt_rag_search
     RAG_AVAILABLE = True
 except ImportError:
-    print("⚠️ M1 RAG non disponible, mode simulation activé")
+    log_warn("⚠️ M1 RAG non disponible, mode simulation activé")
     RAG_AVAILABLE = False
     def imt_rag_search(query: str) -> List[Dict]:
         return [{
@@ -30,10 +39,10 @@ try:
     from .crew_memory import RedisMemoryManager, VolatileMemoryManager
     memory_manager = RedisMemoryManager()
     if not getattr(memory_manager, "available", False):
-        print("⚠️ Redis non disponible (ping échoué), passage en mode mémoire volatile")
+        log_warn("⚠️ Redis non disponible (ping échoué), passage en mode mémoire volatile")
         memory_manager = VolatileMemoryManager()
 except (ImportError, Exception) as e:
-    print(f"⚠️ Erreur chargement Redis: {e}, mode mémoire volatile")
+    log_error(f"⚠️ Erreur chargement Redis: {e}, mode mémoire volatile")
     memory_manager = VolatileMemoryManager()
 
 # Import tracing Langfuse
@@ -41,11 +50,13 @@ try:
     from .langfuse_tracing import LangfuseTracer
     tracer = LangfuseTracer()
 except ImportError:
-    print("⚠️ Langfuse non disponible, mode tracing simulé")
+    log_warn("⚠️ Langfuse non disponible, mode tracing simulé")
     tracer = None
 
 # Chargement variables d'environnement
 load_dotenv()
+
+CREWAI_VERBOSE = os.getenv("CREWAI_VERBOSE", "false").lower() == "true"
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
@@ -62,7 +73,7 @@ def get_llm():
     # Priorité 1: GROQ
     if groq_api_key:
         model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-        print(f"🚀 Configuration GROQ ({model_name})")
+        log_info(f"🚀 Configuration GROQ ({model_name})")
 
         # Fallbacks (Utilisation du paramètre 'fallbacks' pour LiteLLM via CrewAI)
         fallbacks = []
@@ -78,7 +89,7 @@ def get_llm():
                 max_tokens=2000
             )
         except Exception as e:
-            print(f"⚠️ Erreur initialisation GROQ: {e}")
+            log_error(f"⚠️ Erreur initialisation GROQ: {e}")
 
     # Priorité 2: Gemini
     if gemini_api_key:
@@ -86,7 +97,7 @@ def get_llm():
         if model_name.startswith("gemini/"):
             model_name = model_name.replace("gemini/", "")
 
-        print(f"🪄 Configuration Gemini ({model_name})")
+        log_info(f"🪄 Configuration Gemini ({model_name})")
 
         fallbacks = []
         if groq_api_key: fallbacks.append(f"groq/{os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile').replace('groq/', '')}")
@@ -101,9 +112,9 @@ def get_llm():
                 max_tokens=2000
             )
         except Exception as e:
-            print(f"⚠️ Erreur initialisation Gemini: {e}")
+            log_error(f"⚠️ Erreur initialisation Gemini: {e}")
 
-    print("❌ Aucune clé API valide trouvée (GEMINI_API_KEY ou XAI_API_KEY)")
+    log_error("❌ Aucune clé API valide trouvée (GEMINI_API_KEY ou XAI_API_KEY)")
     return None
 
 llm = get_llm()
@@ -230,7 +241,7 @@ def create_agents(session_id: str = None):
         Si et seulement si l'utilisateur demande explicitement un contact ou un email, vous signalez qu'une action est requise.""",
         tools=[recherche_imt_tool],
         llm=llm,
-        verbose=True,
+        verbose=CREWAI_VERBOSE,
         memory=False,
         max_iter=3
     )
@@ -245,7 +256,7 @@ def create_agents(session_id: str = None):
         Votre succès se mesure à la précision de vos rapports d'exécution.""",
         tools=[formulaire_contact_tool, email_directeur_tool],
         llm=llm,
-        verbose=True,
+        verbose=CREWAI_VERBOSE,
         memory=False,
         max_iter=2
     )
@@ -259,7 +270,7 @@ def create_agents(session_id: str = None):
         Votre ton est professionnel mais très direct. Pas de blabla inutile.
         Si une action (formulaire/email) est interrompue, demandez les infos (Nom, Email, Message) très brièvement.""",
         llm=llm,
-        verbose=True,
+        verbose=CREWAI_VERBOSE,
         memory=False,
         max_iter=2
     )
@@ -272,7 +283,7 @@ class IMTCrew:
     
     def __init__(self, session_id: str = None):
         self.session_id = session_id or str(uuid4())[:8]
-        print(f"🆔 Session: {self.session_id}")
+        log_info(f"🆔 Session: {self.session_id}")
         
         # Créer les agents
         self.researcher, self.actioneer, self.manager, self.context = create_agents(self.session_id)
@@ -285,7 +296,7 @@ class IMTCrew:
             agents=[self.researcher, self.actioneer, self.manager],
             tasks=self.tasks,
             process=Process.sequential,
-            verbose=True,
+            verbose=CREWAI_VERBOSE,
             memory=False,
             full_output=False
         )
@@ -369,7 +380,7 @@ class IMTCrew:
         inputs_with_context["context"] = self.context if self.context else ""
 
         
-        print(f"🚀 Démarrage CrewAI pour: '{query[:50]}...'")
+        log_important(f"🚀 Démarrage CrewAI pour: '{query[:50]}...'")
         
         try:
             # Exécuter le crew
@@ -396,7 +407,7 @@ class IMTCrew:
             
         except Exception as e:
             error_msg = f"❌ Erreur CrewAI: {str(e)}"
-            print(error_msg)
+            log_error(error_msg)
             
             if tracer:
                 tracer.end_trace({"error": str(e), "query": query})

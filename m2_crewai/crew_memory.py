@@ -12,6 +12,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import logger centralisé
+try:
+    from logger import log_info, log_warn, log_error
+except ImportError:
+    def log_info(m): pass
+    def log_warn(m): print(m)
+    def log_error(m): print(m)
+
 
 class MemoryManager(ABC):
     """Interface abstraite pour gestionnaires de mémoire"""
@@ -42,7 +50,7 @@ class VolatileMemoryManager(MemoryManager):
     
     def __init__(self):
         self.memory: Dict[str, Dict[str, Any]] = {}
-        print("✅ Mémoire volatile initialisée")
+        log_info("✅ Mémoire volatile initialisée")
     
     def store(self, key: str, value: Any, ttl: int = None) -> bool:
         """Stocker une valeur en RAM"""
@@ -55,7 +63,7 @@ class VolatileMemoryManager(MemoryManager):
             }
             return True
         except Exception as e:
-            print(f"❌ Erreur stockage mémoire: {e}")
+            log_error(f"❌ Erreur stockage mémoire: {e}")
             return False
     
     def retrieve(self, key: str) -> Any:
@@ -122,14 +130,14 @@ class RedisMemoryManager(MemoryManager):
             
             # Test de connexion
             self.redis_client.ping()
-            print(f"✅ Redis (M3) connecté")
+            log_info(f"✅ Redis (M3) connecté")
             self.available = True
             
         except ImportError:
-            print("⚠️ redis_manager non disponible, fallback mémoire volatile")
+            log_warn("⚠️ redis_manager non disponible, fallback mémoire volatile")
             self.available = False
         except Exception as e:
-            print(f"⚠️ Connexion Redis échouée ({e}), fallback mémoire volatile")
+            log_warn(f"⚠️ Connexion Redis échouée ({e}), fallback mémoire volatile")
             self.available = False
 
     def save_to_history(self, session_id: str, role: str, content: str):
@@ -166,7 +174,7 @@ class RedisMemoryManager(MemoryManager):
             
             return True
         except Exception as e:
-            print(f"❌ Erreur Redis set: {e}")
+            log_error(f"❌ Erreur Redis set: {e}")
             return False
     
     def retrieve(self, key: str) -> Any:
@@ -181,7 +189,7 @@ class RedisMemoryManager(MemoryManager):
                 return data.get("value")
             return None
         except Exception as e:
-            print(f"❌ Erreur Redis get: {e}")
+            log_error(f"❌ Erreur Redis get: {e}")
             return None
     
     def delete(self, key: str) -> bool:
@@ -193,7 +201,7 @@ class RedisMemoryManager(MemoryManager):
             self.redis_client.delete(key)
             return True
         except Exception as e:
-            print(f"❌ Erreur Redis delete: {e}")
+            log_error(f"❌ Erreur Redis delete: {e}")
             return False
     
     def clear(self) -> bool:
@@ -205,7 +213,7 @@ class RedisMemoryManager(MemoryManager):
             self.redis_client.flushdb()
             return True
         except Exception as e:
-            print(f"❌ Erreur Redis flush: {e}")
+            log_error(f"❌ Erreur Redis flush: {e}")
             return False
     
     def increment_counter(self, key: str, increment: int = 1) -> int:
@@ -216,7 +224,7 @@ class RedisMemoryManager(MemoryManager):
         try:
             return self.redis_client.incr(key, increment)
         except Exception as e:
-            print(f"❌ Erreur Redis incr: {e}")
+            log_error(f"❌ Erreur Redis incr: {e}")
             return 0
     
     def get_stats(self) -> Dict[str, Any]:
@@ -304,10 +312,10 @@ class CrewMemoryContext:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
             
-            print(f"✅ Mémoire exportée: {filepath}")
+            log_info(f"✅ Mémoire exportée: {filepath}")
             return True
         except Exception as e:
-            print(f"❌ Erreur export mémoire: {e}")
+            log_error(f"❌ Erreur export mémoire: {e}")
             return False
     
     def clear(self) -> bool:
