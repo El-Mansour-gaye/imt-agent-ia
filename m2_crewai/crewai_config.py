@@ -225,9 +225,9 @@ def create_agents(session_id: str = None):
     # Agent 1: Researcher (RAG)
     researcher = Agent(
         role="Analyste Expert IMT Dakar",
-        goal="Extraire des infos précises et identifier le besoin d'action.",
-        backstory="""Expert IMT Dakar. Vous extrayez UNIQUEMENT les faits du RAG.
-        Vous identifiez si l'utilisateur veut contacter l'école et si nous avons son Nom, Email et Message.""",
+        goal="Fournir des informations précises sur l'IMT via le RAG.",
+        backstory="""Expert IMT Dakar. Votre priorité est de répondre aux questions sur l'école en utilisant l'outil de recherche.
+        Si et seulement si l'utilisateur demande explicitement un contact ou un email, vous signalez qu'une action est requise.""",
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=True,
@@ -299,34 +299,30 @@ class IMTCrew:
         
         # Tâche 1: Analyse & Recherche
         research_task = Task(
-            description="""Analyse approfondie de la requête: '{query}'.
+            description="""Analyse de la requête: '{query}'.
             
             {context}
             
             Instructions:
-            1. RECHERCHE: Utilise le RAG pour trouver des réponses précises sur l'IMT.
-            2. DIAGNOSTIC: L'utilisateur a-t-il besoin d'une action de contact (formulaire/email) ?
-            3. VÉRIFICATION: Si une action est nécessaire, vérifie si nous avons dans le contexte ou la requête:
-               - Le Nom complet
-               - L'Email
-               - Le Message spécifique
-            4. SORTIE: Fournis la réponse informative et liste CLAIREMENT les données manquantes pour une éventuelle action.""",
+            1. RECHERCHE: Utilise TOUJOURS le RAG pour trouver des informations pertinentes.
+            2. RÉPONSE: Prépare une réponse informative basée sur les résultats.
+            3. ACTION: Identifie si l'utilisateur veut explicitement remplir un formulaire ou envoyer un email.
+            4. VÉRIFICATION: Uniquement pour les actions de contact, liste les données manquantes (Nom, Email, Message).""",
             agent=self.researcher,
-            expected_output="Analyse de la requête, informations extraites et inventaire des données utilisateur disponibles.",
+            expected_output="Informations extraites du RAG et diagnostic sur le besoin d'action de contact.",
             output_file="outputs/research_result.md"
         )
         
         # Tâche 2: Exécution de l'Action (Conditionnelle)
         action_task = Task(
-            description="""Décision d'exécution pour la requête: '{query}'.
+            description="""Décision d'exécution pour: '{query}'.
             
             Instructions:
-            1. Analyse l'inventaire des données fourni par le Researcher.
-            2. Si une action est requise ET que TOUTES les données (Nom, Email, Message) sont présentes, exécute l'outil approprié.
-            3. S'il manque ne serait-ce qu'une information, N'UTILISE AUCUN OUTIL et indique précisément : 'ACTION_INTERROMPUE: Manque [liste des champs]'.
-            4. Si aucune action n'est demandée, indique 'STATUT: Information uniquement'.""",
+            1. Si une action de contact est demandée ET que TOUTES les données (Nom, Email, Message) sont présentes, exécute l'outil.
+            2. Sinon, ne fais rien et indique simplement si des informations manquent pour un futur contact.
+            3. NE BLOQUE PAS la fourniture d'informations générales.""",
             agent=self.actioneer,
-            expected_output="Résultat de l'outil ou rapport d'interruption pour données manquantes.",
+            expected_output="Résultat de l'action ou statut des données de contact.",
             context=[research_task],
             output_file="outputs/execution_report.md"
         )
@@ -336,13 +332,14 @@ class IMTCrew:
             description="""Synthèse finale pour: '{query}'.
             
             RÈGLES D'OR:
-            1. CONCISION EXTRÊME: Réponds en 2 PHRASES MAXIMUM (sauf si liste technique requise).
-            2. STRUCTURE: Si réponse longue, utilise des puces très courtes et aérées.
-            3. OUTILS: Propose l'envoi d'email ou le formulaire UNIQUEMENT si l'historique montre au moins 3 échanges ou si l'utilisateur semble perdu.
-            4. ACTION: Si 'ACTION_INTERROMPUE', demande 'Nom, Email, Message' sans détour.
-            5. SOURCE: Cite imt.sn brièvement.""",
+            1. RÉPONSE D'ABORD: Donne TOUJOURS la réponse informative basée sur les recherches de l'Analyste en premier.
+            2. CONCISION: Réponds en 2-3 PHRASES MAXIMUM.
+            3. COLLECTE DATA: Si une action était prévue mais interrompue (manque Nom/Email), mentionne-le TRÈS brièvement APRÈS avoir donné l'information demandée.
+            4. PERTINENCE: Ne demande Nom/Email QUE si l'utilisateur a explicitement demandé une action (formulaire/email) ou si tu proposes l'outil après 3 messages.
+            5. STRUCTURE: Utilise des puces courtes pour les listes.
+            6. SOURCE: Cite imt.sn.""",
             agent=self.manager,
-            expected_output="Réponse courte, précise et professionnelle.",
+            expected_output="Réponse informative concise, suivie éventuellement d'une brève demande de coordonnées si pertinent.",
             context=[research_task, action_task]
         )
         
