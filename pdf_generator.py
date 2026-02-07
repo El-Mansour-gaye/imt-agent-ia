@@ -10,11 +10,16 @@ def generate_reco_pdf(profile_text: str) -> str:
     c.drawString(40, 800, "Plan personnalisé – IMT")
     c.drawString(40, 770, "Analyse de votre profil :")
     
-    y = 740
-    for line in profile_text.split("\n"):
-        c.drawString(40, y, line)
-        y -= 15
+    text_obj = c.beginText(40, 740)
+    text_obj.setFont("Helvetica", 10)
+    text_obj.setLeading(14)
 
+    # Découpage basique pour éviter de sortir de la page
+    for line in profile_text.split("\n"):
+        # On pourrait ajouter un wrapping ici si nécessaire
+        text_obj.textLine(line)
+
+    c.drawText(text_obj)
     c.showPage()
     c.save()
     return tmp.name
