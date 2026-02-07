@@ -49,55 +49,57 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI (Grok par défaut si dispo, sinon Gemini)"""
+    """Configure l'LLM via l'interface native de CrewAI (Groq > Grok > Gemini)"""
+    groq_api_key = os.getenv("GROQ_API_KEY")
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
 
-    # Nettoyage des clés au cas où (ex: double '=' dans le .env)
-    if xai_api_key:
-        xai_api_key = xai_api_key.strip().lstrip('=')
-    if gemini_api_key:
-        gemini_api_key = gemini_api_key.strip().lstrip('=')
+    # Nettoyage des clés au cas où
+    if groq_api_key: groq_api_key = groq_api_key.strip().lstrip('=')
+    if xai_api_key: xai_api_key = xai_api_key.strip().lstrip('=')
+    if gemini_api_key: gemini_api_key = gemini_api_key.strip().lstrip('=')
 
-    # Construction de la liste de modèles et fallbacks
-    # Priorité à Grok (xAI) comme demandé par l'utilisateur
-    if xai_api_key:
-        model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
-        if model_name.startswith("xai/"):
-            model_name = model_name.replace("xai/", "")
+    # Priorité 1: GROQ (Demande explicite de l'utilisateur)
+    if groq_api_key:
+        model_name = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        print(f"🚀 Configuration GROQ ({model_name})")
 
-        primary = f"xai/{model_name}"
-
-        # Fallbacks
         fallbacks = []
-        if gemini_api_key:
-            gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            if gemini_model.startswith("gemini/"):
-                gemini_model = gemini_model.replace("gemini/", "")
-            fallbacks.append(f"gemini/{gemini_model}")
+        if xai_api_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
+        if gemini_api_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
 
-        print(f"🚀 Configuration Grok ({model_name}) - Fallback Gemini: {bool(gemini_api_key)}")
         try:
             return LLM(
-                model=primary,
+                model=f"groq/{model_name.replace('groq/', '')}",
                 fallback_models=fallbacks,
-                api_key=xai_api_key,
+                api_key=groq_api_key,
                 temperature=0.4,
                 max_tokens=2000
             )
         except Exception as e:
-            print(f"⚠️ Erreur initialisation Grok: {e}")
+            print(f"⚠️ Erreur initialisation GROQ: {e}")
 
+    # Priorité 2: Gemini (Pour stabilité si Groq absent)
     if gemini_api_key:
-        # Gemini si Grok non dispo
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
         if model_name.startswith("gemini/"):
             model_name = model_name.replace("gemini/", "")
 
-        print(f"🪄 Configuration Gemini ({model_name}) par défaut")
+        print(f"🪄 Configuration Gemini ({model_name})")
+
+        fallbacks = []
+        if xai_api_key:
+            grok_model = os.getenv("GROK_MODEL", "grok-2-latest").replace("xai/", "")
+            fallbacks.append(f"xai/{grok_model}")
+
+        for g_model in ["gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+            if g_model != model_name:
+                fallbacks.append(f"gemini/{g_model}")
+
         try:
             return LLM(
                 model=f"gemini/{model_name}",
+                fallback_models=fallbacks,
                 api_key=gemini_api_key,
                 temperature=0.4,
                 max_tokens=2000
