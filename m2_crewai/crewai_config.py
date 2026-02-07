@@ -66,7 +66,7 @@ def get_llm():
 
         # Fallbacks (Utilisation du paramètre 'fallbacks' pour LiteLLM via CrewAI)
         fallbacks = []
-        if gemini_api_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
+        if gemini_api_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-2.0-flash').replace('gemini/', '')}")
         if xai_api_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
 
         try:
