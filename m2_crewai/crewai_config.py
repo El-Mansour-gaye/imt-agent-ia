@@ -49,65 +49,55 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI (Gemini par défaut, Grok en fallback)"""
+    """Configure l'LLM via l'interface native de CrewAI (Grok par défaut si dispo, sinon Gemini)"""
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
 
     # Construction de la liste de modèles et fallbacks
-    if gemini_api_key:
-        # Priorité à Gemini
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        # Nettoyage si l'utilisateur a mis 'gemini/' dans son .env
-        if model_name.startswith("gemini/"):
-            model_name = model_name.replace("gemini/", "")
+    # Priorité à Grok (xAI) comme demandé par l'utilisateur
+    if xai_api_key:
+        model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
+        if model_name.startswith("xai/"):
+            model_name = model_name.replace("xai/", "")
 
-        primary = f"gemini/{model_name}"
+        primary = f"xai/{model_name}"
 
-        # Fallbacks intelligents
+        # Fallbacks
         fallbacks = []
-        if xai_api_key:
-            grok_model = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
-            # Nettoyage si 'xai/' présent
-            if grok_model.startswith("xai/"):
-                grok_model = grok_model.replace("xai/", "")
-            fallbacks.append(f"xai/{grok_model}")
+        if gemini_api_key:
+            gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            if gemini_model.startswith("gemini/"):
+                gemini_model = gemini_model.replace("gemini/", "")
+            fallbacks.append(f"gemini/{gemini_model}")
 
-        # Ajouter d'autres versions de Gemini en dernier recours
-        for g_model in ["gemini-1.5-flash", "gemini-2.0-flash-exp"]:
-            if f"gemini/{g_model}" != primary:
-                fallbacks.append(f"gemini/{g_model}")
-
-        # Nettoyage fallbacks
-        unique_fallbacks = []
-        for f in fallbacks:
-            if f not in unique_fallbacks and f != primary:
-                unique_fallbacks.append(f)
-
-        print(f"🪄 Configuration Gemini ({model_name}) - Fallback Grok: {bool(xai_api_key)}")
+        print(f"🚀 Configuration Grok ({model_name}) - Fallback Gemini: {bool(gemini_api_key)}")
         try:
             return LLM(
                 model=primary,
-                fallback_models=unique_fallbacks,
-                api_key=gemini_api_key,
-                temperature=0.4,
-                max_tokens=2000
-            )
-        except Exception as e:
-            print(f"⚠️ Erreur initialisation Gemini: {e}")
-
-    if xai_api_key:
-        # Grok si Gemini non dispo
-        model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
-        print(f"🚀 Configuration Grok ({model_name}) par défaut")
-        try:
-            return LLM(
-                model=f"xai/{model_name}",
+                fallback_models=fallbacks,
                 api_key=xai_api_key,
                 temperature=0.4,
                 max_tokens=2000
             )
         except Exception as e:
             print(f"⚠️ Erreur initialisation Grok: {e}")
+
+    if gemini_api_key:
+        # Gemini si Grok non dispo
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        if model_name.startswith("gemini/"):
+            model_name = model_name.replace("gemini/", "")
+
+        print(f"🪄 Configuration Gemini ({model_name}) par défaut")
+        try:
+            return LLM(
+                model=f"gemini/{model_name}",
+                api_key=gemini_api_key,
+                temperature=0.4,
+                max_tokens=2000
+            )
+        except Exception as e:
+            print(f"⚠️ Erreur initialisation Gemini: {e}")
 
     print("❌ Aucune clé API valide trouvée (GEMINI_API_KEY ou XAI_API_KEY)")
     return None

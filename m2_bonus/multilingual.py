@@ -253,15 +253,20 @@ class MultilingualProcessor:
             
             prompt = f"Traduis ce texte en {target_name}. Conserve le sens exact.\n\nTexte: {text}\n\nTraduction:"
             
-            # Définir le modèle primaire et fallbacks
-            model = "gemini/gemini-1.5-flash"
-            if os.getenv("GEMINI_MODEL"):
-                model = f"gemini/{os.getenv('GEMINI_MODEL').replace('gemini/', '')}"
-            
-            fallbacks = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
+            # Définir le modèle primaire et fallbacks (Priorité Grok si disponible)
             if xai_key:
-                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
-                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+                model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
+                model = f"xai/{model_name.replace('xai/', '')}"
+                fallbacks = []
+                if gemini_key:
+                    gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                    fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
+            elif gemini_key:
+                model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                model = f"gemini/{model_name.replace('gemini/', '')}"
+                fallbacks = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
+            else:
+                return self._fallback_translation(text, target_lang)
             
             # Utiliser litellm pour la complétion avec fallbacks
             response = litellm.completion(
