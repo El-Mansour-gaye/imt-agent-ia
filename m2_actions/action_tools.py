@@ -297,10 +297,22 @@ def send_director_email(
                 grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
                 fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
 
-            prompt = f"""Transforme ce message en email professionnel pour le directeur de l'IMT:
+            prompt = f"""
+            Transforme ce message en email professionnel pour le directeur de l'IMT:
+
             Sujet: {data.sujet}
             Message original: {data.corps}
-            Exigences: Français formel, Signature: 'Assistant IMT AI'"""
+
+            Format demandé:
+            1. Formule d'appel formelle
+            2. Introduction courtoise
+            3. Corps du message structuré
+            4. Formule de politesse
+            5. Signature: "Assistant IMT AI"
+
+            Langue: Français formel
+            Style: Professionnel, éducatif, respectueux
+            """
             
             response = litellm.completion(
                 model=primary,
