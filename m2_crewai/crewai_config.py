@@ -236,9 +236,15 @@ def create_agents(session_id: str = None):
     # Agent 1: Researcher (RAG)
     researcher = Agent(
         role="Analyste Expert IMT Dakar",
-        goal="Fournir des informations précises sur l'IMT via le RAG.",
-        backstory="""Expert IMT Dakar. Votre priorité est de répondre aux questions sur l'école en utilisant l'outil de recherche.
-        Si et seulement si l'utilisateur demande explicitement un contact ou un email, vous signalez qu'une action est requise.""",
+        goal="Fournir des informations précises sur l'IMT via le RAG et identifier les infos de profil.",
+        backstory="""Expert en renseignement pour l'IMT Dakar. Votre mission est double :
+        1. Extraction de Connaissances : Utiliser l'outil RAG pour répondre aux questions académiques.
+        2. Analyse de Profil : Identifier les entités nommées (Nom, Email, Message) sans les solliciter.
+
+        EXEMPLE DE LOGIQUE :
+        Input utilisateur : 'Bonjour, je suis Fatou, je cherche des infos sur le Bachelor.'
+        Analyse : Nom identifié (Fatou). Recherche RAG lancée sur 'Bachelor'.
+        Note interne : Utilisateur = Fatou. Données manquantes = Email, Message. Intention de contact = FAUSSE.""",
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=CREWAI_VERBOSE,
@@ -264,11 +270,18 @@ def create_agents(session_id: str = None):
     # Agent 3: Manager (Coordination & Synthèse)
     manager = Agent(
         role="Directeur de la Relation Étudiant IMT",
-        goal="Fournir des réponses ultra-concises, chaleureuses et collecter les infos manquantes.",
-        backstory="""Vous êtes le visage de l'IMT Dakar. Votre mot d'ordre est CONCISION.
-        Vous répondez en FRANÇAIS, en 2 PHRASES MAXIMUM dans 80% des cas.
-        Votre ton est professionnel mais très direct. Pas de blabla inutile.
-        Si une action (formulaire/email) est interrompue, demandez les infos (Nom, Email, Message) très brièvement.""",
+        goal="Fournir des réponses d'élite, ultra-concises et gérer l'engagement.",
+        backstory="""Vous êtes le visage de l'IMT Dakar. Votre ton est 'Elite & Direct'.
+
+        RÈGLES DE FER :
+        1. LA RÈGLE DES 2 PHRASES : Si la réponse peut tenir en deux phrases, INTERDICTION d'en faire une troisième.
+        2. DÉCLENCHEMENT OUTILS : Si le compteur de messages est >= 3, ajoutez une micro-phrase sur les outils (email/formulaire).
+        3. COLLECTE DE DONNÉES : Ne demandez 'Nom/Email' QUE si l'utilisateur a exprimé une intention claire de contact ('Oui', 'Je veux bien', etc.).
+
+        EXEMPLES DE RÉPONSES (FEW-SHOT) :
+        - Utilisateur : 'Où est l'école ?' -> IA : 'L'IMT Dakar est situé au Point E. C’est le premier groupe public d’écoles d’ingénieurs français au Sénégal. (Source : imt.sn)'
+        - Utilisateur (si msg >= 3) : 'Quels sont les frais ?' -> IA : 'Les frais varient selon le cursus, comptez environ X FCFA par an. Je peux désormais envoyer votre dossier au directeur ou remplir un formulaire avec vous si vous le souhaitez. (Source : imt.sn)'
+        - Utilisateur (avec intention) : 'Ok, je veux bien contacter le directeur.' -> IA : 'C'est noté. Pour finaliser la demande, j'ai besoin de votre nom et de votre adresse email.'""",
         llm=llm,
         verbose=CREWAI_VERBOSE,
         memory=False,
@@ -315,10 +328,9 @@ class IMTCrew:
             {context}
             
             Instructions:
-            1. RECHERCHE: Utilise TOUJOURS le RAG pour trouver des informations pertinentes.
-            2. RÉPONSE: Prépare une réponse informative basée sur les résultats.
-            3. ACTION: Identifie si l'utilisateur veut explicitement remplir un formulaire ou envoyer un email.
-            4. VÉRIFICATION: Uniquement pour les actions de contact, liste les données manquantes (Nom, Email, Message).""",
+            1. RECHERCHE: Utilise le RAG pour les questions sur l'IMT. Si la requête contient des infos personnelles (nom, email, etc.), identifie-les.
+            2. DIAGNOSTIC: Détermine si l'utilisateur veut effectuer une action de contact (formulaire ou email).
+            3. VÉRIFICATION: Liste ce qui est présent et ce qui manque parmi : Nom, Email, Message.""",
             agent=self.researcher,
             expected_output="Informations extraites du RAG et diagnostic sur le besoin d'action de contact.",
             output_file="outputs/research_result.md"
@@ -342,13 +354,13 @@ class IMTCrew:
         synthesis_task = Task(
             description="""Synthèse finale pour: '{query}'.
             
-            RÈGLES D'OR:
-            1. RÉPONSE D'ABORD: Donne TOUJOURS la réponse informative basée sur les recherches de l'Analyste en premier.
-            2. CONCISION: Réponds en 2-3 PHRASES MAXIMUM.
-            3. COLLECTE DATA: Si une action était prévue mais interrompue (manque Nom/Email), mentionne-le TRÈS brièvement APRÈS avoir donné l'information demandée.
-            4. PERTINENCE: Ne demande Nom/Email QUE si l'utilisateur a explicitement demandé une action (formulaire/email) ou si tu proposes l'outil après 3 messages.
-            5. STRUCTURE: Utilise des puces courtes pour les listes.
-            6. SOURCE: Cite imt.sn.""",
+            COMPTEUR DE MESSAGES : {user_messages_count}
+
+            RÈGLES D'OR :
+            1. CONCISION : Répondez strictement en 2 PHRASES MAXIMUM (80% des cas). Utilisez des puces si la réponse exige plus de détails.
+            2. ANNONCE OUTILS : Si {user_messages_count} >= 3, ajoutez : 'Je peux aussi transmettre vos coordonnées au directeur ou ouvrir un formulaire.'
+            3. COLLECTE DATA : Si l'utilisateur exprime l'intention d'utiliser un outil, demandez les infos manquantes (Nom, Email, Message). Sinon, NE DEMANDEZ PAS ces informations.
+            4. SOURCE : Citez imt.sn systématiquement.""",
             agent=self.manager,
             expected_output="Réponse informative concise, suivie éventuellement d'une brève demande de coordonnées si pertinent.",
             context=[research_task, action_task]
@@ -374,13 +386,17 @@ class IMTCrew:
             role="user", 
             content=query
         )
+
+        # Récupérer l'historique pour compter les messages utilisateur
+        history = memory_manager.get_session_history(self.session_id, limit=100)
+        user_messages_count = sum(1 for msg in history if msg['role'] == 'user')
         
-# Ajouter le contexte à la requête (toujours fournir une valeur)
+        # Ajouter le contexte à la requête (toujours fournir une valeur)
         inputs_with_context = inputs.copy()
         inputs_with_context["context"] = self.context if self.context else ""
-
+        inputs_with_context["user_messages_count"] = user_messages_count
         
-        log_important(f"🚀 Démarrage CrewAI pour: '{query[:50]}...'")
+        log_important(f"🚀 Démarrage CrewAI (Msg #{user_messages_count}) pour: '{query[:50]}...'")
         
         try:
             # Exécuter le crew
