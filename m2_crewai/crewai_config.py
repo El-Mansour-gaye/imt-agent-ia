@@ -52,7 +52,7 @@ load_dotenv()
 def get_llm():
     """Configure l'LLM via l'interface native de CrewAI"""
     api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
     
     if not api_key:
         print("⚠️ GEMINI_API_KEY manquante, mode simulation (certaines actions peuvent échouer)")
