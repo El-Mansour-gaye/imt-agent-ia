@@ -242,10 +242,14 @@ class MultilingualProcessor:
             from dotenv import load_dotenv
             
             load_dotenv()
+            groq_key = os.getenv("GROQ_API_KEY")
             gemini_key = os.getenv("GEMINI_API_KEY")
             xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
             
-            # Nettoyage des clés
+            # Nettoyage et injection
+            if groq_key:
+                groq_key = groq_key.strip().lstrip('=')
+                os.environ["GROQ_API_KEY"] = groq_key
             if xai_key:
                 xai_key = xai_key.strip().lstrip('=')
                 os.environ["XAI_API_KEY"] = xai_key
@@ -253,7 +257,7 @@ class MultilingualProcessor:
                 gemini_key = gemini_key.strip().lstrip('=')
                 os.environ["GEMINI_API_KEY"] = gemini_key
 
-            if not gemini_key and not xai_key:
+            if not any([groq_key, gemini_key, xai_key]):
                 return self._fallback_translation(text, target_lang)
             
             lang_names = {'fr': 'français', 'en': 'anglais', 'wo': 'wolof', 'es': 'espagnol', 'ar': 'arabe'}
@@ -261,16 +265,17 @@ class MultilingualProcessor:
             
             prompt = f"Traduis ce texte en {target_name}. Conserve le sens exact.\n\nTexte: {text}\n\nTraduction:"
             
-            # Définir le modèle primaire et fallbacks (Priorité Grok si disponible)
-            if xai_key:
+            # Définir le modèle primaire et fallbacks (Priorité Groq)
+            if groq_key:
+                model_name = os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+                model = f"groq/{model_name.replace('groq/', '')}"
+                fallbacks = []
+                if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
+            elif xai_key:
                 model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
                 model = f"xai/{model_name.replace('xai/', '')}"
                 fallbacks = []
-                if gemini_key:
-                    fallbacks.append("gemini/gemini-flash-latest")
-                    gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-                    if "gemini-flash-latest" not in gemini_model:
-                        fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
+                if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
             elif gemini_key:
                 model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
                 model = f"gemini/{model_name.replace('gemini/', '')}"

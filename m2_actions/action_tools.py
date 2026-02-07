@@ -285,10 +285,14 @@ def send_director_email(
     email_content = data.corps
     try:
         import litellm
+        groq_key = os.getenv("GROQ_API_KEY")
         gemini_key = os.getenv("GEMINI_API_KEY")
         xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
         
-        # Nettoyage des clés et mise à jour environnement pour litellm
+        # Nettoyage et injection environnement
+        if groq_key:
+            groq_key = groq_key.strip().lstrip('=')
+            os.environ["GROQ_API_KEY"] = groq_key
         if xai_key:
             xai_key = xai_key.strip().lstrip('=')
             os.environ["XAI_API_KEY"] = xai_key
@@ -296,15 +300,16 @@ def send_director_email(
             gemini_key = gemini_key.strip().lstrip('=')
             os.environ["GEMINI_API_KEY"] = gemini_key
 
-        if xai_key:
+        if groq_key:
+            model_name = os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
+            primary = f"groq/{model_name.replace('groq/', '')}"
+            fallbacks = []
+            if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
+        elif xai_key:
             model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
             primary = f"xai/{model_name.replace('xai/', '')}"
             fallbacks = []
-            if gemini_key:
-                fallbacks.append("gemini/gemini-flash-latest")
-                gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-                if "gemini-flash-latest" not in gemini_model:
-                    fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
+            if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
         elif gemini_key:
             model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
             primary = f"gemini/{model_name.replace('gemini/', '')}"
