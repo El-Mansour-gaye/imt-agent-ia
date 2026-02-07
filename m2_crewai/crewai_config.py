@@ -147,6 +147,9 @@ def recherche_imt_tool(query: str) -> str:
         return formatted
     except Exception as e:
         error_msg = f"❌ Erreur recherche: {str(e)}"
+        if "429" in str(e) or "quota" in str(e).lower():
+            error_msg = "⚠️ Le service de recherche est temporairement saturé (Quota API). Veuillez réessayer dans quelques instants."
+
         if tracer:
             tracer.end_span("rag_search", {"error": str(e)})
         return error_msg
