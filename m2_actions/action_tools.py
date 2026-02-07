@@ -288,15 +288,21 @@ def send_director_email(
         gemini_key = os.getenv("GEMINI_API_KEY")
         xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
         
-        if gemini_key or xai_key:
+        if xai_key:
+            model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
+            primary = f"xai/{model_name.replace('xai/', '')}"
+            fallbacks = []
+            if gemini_key:
+                gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                fallbacks.append(f"gemini/{gemini_model.replace('gemini/', '')}")
+        elif gemini_key:
             model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
             primary = f"gemini/{model_name.replace('gemini/', '')}"
-            
             fallbacks = ["gemini/gemini-1.5-flash"]
-            if xai_key:
-                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
-                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+        else:
+            primary = None
 
+        if primary:
             prompt = f"""
             Transforme ce message en email professionnel pour le directeur de l'IMT:
 
