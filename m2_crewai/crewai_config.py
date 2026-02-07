@@ -314,6 +314,9 @@ class IMTCrew:
     """Crew principal IMT avec mémoire et tracing"""
     
     def __init__(self, session_id: str = None):
+        # S'assurer que le dossier outputs existe pour les tâches
+        os.makedirs("outputs", exist_ok=True)
+
         self.session_id = session_id or str(uuid4())[:8]
         log_info(f"🆔 Session: {self.session_id}")
         
@@ -415,6 +418,8 @@ class IMTCrew:
         inputs_with_context = inputs.copy()
         inputs_with_context["context"] = self.context if self.context else ""
         inputs_with_context["user_messages_count"] = user_messages_count
+        # Sécurité : variable template parfois utilisée dans les prompts Langfuse
+        inputs_with_context["extracted_data"] = inputs.get("extracted_data", "")
         
         log_important(f"🚀 Démarrage CrewAI (Msg #{user_messages_count}) pour: '{query[:50]}...'")
         
