@@ -20,10 +20,12 @@ from langfuse import get_client as get_langfuse_client, observe
 from redis_manager import (
     save_message,
     get_last_messages,
+    get_all_messages,
     count_messages,
     save_summary,
     get_summary,
-    build_context
+    build_context,
+    get_all_session_ids
 )
 from analytics import (
     increment_query,
@@ -60,20 +62,17 @@ def get_data_age():
     except Exception:
         return 0
 
-async def update_sidebar():
+async def show_admin_dashboard():
     chunks = get_collection_stats()
     days = get_data_age()
     counts = get_query_counts()
 
-    # Calculer le top formation (simplifié)
     top_formation = "N/A"
     if counts:
         top_formation = max(counts, key=counts.get)
 
-    # Metrics Langfuse (Simulé si pas d'API réelle, sinon on pourrait appeler l'API Langfuse)
-    # Pour la démo, on utilise des valeurs qui bougent un peu
-    cost = 0.02 # Valeur fixe ou calculée
-    latency = 1.2 # Valeur fixe ou calculée
+    cost = 0.02
+    latency = 1.2
 
     feedbacks = get_feedback_list()
     if feedbacks:
@@ -84,31 +83,37 @@ async def update_sidebar():
         fb_text = "👍 100% (0/0)"
 
     metrics_content = f"""
-### 📊 Dashboard Live
-**Session ID:** `{cl.user_session.get("session_id")}`
-**Statut:** 🟢 Online
+### 🛠️ ESPACE ADMIN - Dashboard Live
+**Session ID actuelle:** `{cl.user_session.get("session_id")}`
+**Statut Serveur:** 🟢 Opérationnel
 
 ---
-**RAG Metrics:**
-- 🧩 Chunks: `{chunks}`
-- 📅 Données: `{days}j`
-- 🌍 Langue: `FR/Wolof`
+**📦 RAG & DATA:**
+- 🧩 Chunks indexés: `{chunks}`
+- 📅 Fraîcheur: `{days} jours`
+- 🌍 Langues: `FR / Wolof (TTS)`
 
 ---
-**Performance:**
-- 💸 Coût: `{cost}$`
-- ⚡ Latence: `{latency}s`
+**⚡ PERFORMANCE & COÛT:**
+- 💸 Coût estimé: `{cost}$`
+- ⏱️ Latence moy: `{latency}s`
 - {fb_text}
 
 ---
-**Top Queries:**
-- `{top_formation.upper()}`
+**📈 ANALYTICS:**
+- Top Formation: `{top_formation.upper()}`
+- Total Sessions: `{len(get_all_session_ids())}`
 """
 
-    # Pour afficher dans la sidebar, on l'attache à un message ou on utilise les éléments
+    session_ids = get_all_session_ids()
+    session_actions = [
+        cl.Action(name="view_history", value=sid, label=f"📜 {sid[:8]}", payload={"sid": sid})
+        for sid in session_ids[-5:] # Montrer les 5 dernières
+    ]
+
     await cl.Message(
-        content="📊 **Metrics actualisées**",
-        elements=[cl.Text(name="Dashboard", content=metrics_content, display="side")]
+        content=f"### 🔐 Accès Admin Autorisé\n\n{metrics_content}",
+        actions=session_actions + [cl.Action(name="refresh_admin", value="refresh", label="🔄 Actualiser", payload={})]
     ).send()
 
 async def call_agent(user_message: str, session_id: str) -> str:
@@ -141,12 +146,11 @@ async def on_chat_start():
     session_id = create_session_id()
     cl.user_session.set("session_id", session_id)
 
-    await update_sidebar()
-
     actions = [
         cl.Action(name="fill_form", value="form", label="📝 Remplir Formulaire", payload={}),
         cl.Action(name="send_email", value="email", label="📧 Email Directeur", payload={}),
         cl.Action(name="gen_pdf", value="pdf", label="📥 PDF Recommandations", payload={}),
+        cl.Action(name="admin_mode", value="admin", label="🛠️ Admin", payload={}),
     ]
 
     await cl.Message(
@@ -223,6 +227,29 @@ async def gen_pdf_callback(action):
     except Exception as e:
         await cl.Message(content=f"❌ Erreur PDF : {str(e)}").send()
 
+@cl.action_callback("admin_mode")
+async def admin_mode_callback(action):
+    await show_admin_dashboard()
+
+@cl.action_callback("refresh_admin")
+async def refresh_admin_callback(action):
+    await show_admin_dashboard()
+
+@cl.action_callback("view_history")
+async def view_history_callback(action):
+    sid = action.payload.get("sid")
+    messages = get_all_messages(sid)
+
+    history_text = f"### 📜 Historique de la Session `{sid}`\n\n"
+    if not messages:
+        history_text += "Aucun message trouvé."
+    else:
+        for m in messages:
+            role = "👤 USER" if m["role"] == "user" else "🤖 IA"
+            history_text += f"**[{m['timestamp'][:16]}] {role}:** {m['content']}\n\n"
+
+    await cl.Message(content=history_text).send()
+
 @cl.action_callback("fill_form")
 async def fill_form_callback(action):
     session_id = cl.user_session.get("session_id")
@@ -264,7 +291,6 @@ async def on_feedback(feedback):
     score = 1 if feedback.value == "positive" else -1
     save_feedback(session_id, score)
     await cl.Message(content="Merci pour votre retour ! 👍").send()
-    await update_sidebar()
 
 # =========================
 # VOICE I/O
