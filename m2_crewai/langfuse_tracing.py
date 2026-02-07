@@ -104,6 +104,37 @@ class LangfuseTracer:
         if self.langfuse:
             self.langfuse.flush()
 
+    def get_prompt(self, name: str, fallback: str = None) -> str:
+        """Retrieve a prompt from Langfuse"""
+        if not self.langfuse:
+            return fallback
+
+        try:
+            # Récupération du prompt depuis Langfuse
+            prompt_config = self.langfuse.get_prompt(name)
+            compiled_prompt = prompt_config.compile()
+            log_info(f"✅ Prompt '{name}' récupéré de Langfuse")
+            return compiled_prompt
+        except Exception as e:
+            log_warn(f"⚠️ Impossible de récupérer le prompt '{name}' de Langfuse: {e}")
+            return fallback
+
+    def get_callback_handler(self):
+        """Get the Langfuse callback handler for Langchain/CrewAI"""
+        if not self.langfuse:
+            return None
+
+        try:
+            from langfuse.langchain import CallbackHandler
+            return CallbackHandler(
+                public_key=self.public_key,
+                secret_key=self.secret_key,
+                host=self.host
+            )
+        except (ImportError, ModuleNotFoundError):
+            log_warn("⚠️ langfuse.langchain ou langchain non disponible")
+            return None
+
 
 # Example usage
 def get_tracer():
