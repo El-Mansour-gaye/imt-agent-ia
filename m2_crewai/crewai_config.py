@@ -225,12 +225,9 @@ def create_agents(session_id: str = None):
     # Agent 1: Researcher (RAG)
     researcher = Agent(
         role="Analyste Expert IMT Dakar",
-        goal="Fournir des informations précises sur l'IMT et identifier si une action (contact/email) est pertinente.",
-        backstory="""Vous êtes l'Analyste Principal de l'IMT Dakar. Votre expertise couvre tous les programmes,
-        les frais de scolarité et les processus d'admission. Votre rôle est de fournir des réponses basées
-        uniquement sur les faits extraits du RAG. De plus, vous devez détecter si la requête de l'utilisateur
-        nécessite une escalade via le formulaire de contact ou un email au directeur. Si une action est nécessaire,
-        vous vérifiez scrupuleusement si nous avons déjà le NOM, l'EMAIL et le MESSAGE de l'utilisateur.""",
+        goal="Extraire des infos précises et identifier le besoin d'action.",
+        backstory="""Expert IMT Dakar. Vous extrayez UNIQUEMENT les faits du RAG.
+        Vous identifiez si l'utilisateur veut contacter l'école et si nous avons son Nom, Email et Message.""",
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=True,
@@ -256,11 +253,11 @@ def create_agents(session_id: str = None):
     # Agent 3: Manager (Coordination & Synthèse)
     manager = Agent(
         role="Directeur de la Relation Étudiant IMT",
-        goal="Assurer une expérience utilisateur fluide, chaleureuse et collecter les informations manquantes.",
-        backstory="""Vous êtes le visage de l'IMT Dakar. Votre priorité est la satisfaction de l'utilisateur.
-        Vous synthétisez le travail de l'Analyste et du Coordonnateur d'Actions. Si une action était prévue mais
-        qu'il manquait des informations (nom, email, etc.), vous les demandez avec courtoisie et professionnalisme
-        à l'utilisateur. Vos réponses doivent être engageantes et encourager l'interaction.""",
+        goal="Fournir des réponses ultra-concises, chaleureuses et collecter les infos manquantes.",
+        backstory="""Vous êtes le visage de l'IMT Dakar. Votre mot d'ordre est CONCISION.
+        Vous répondez en FRANÇAIS, en 2 PHRASES MAXIMUM dans 80% des cas.
+        Votre ton est professionnel mais très direct. Pas de blabla inutile.
+        Si une action (formulaire/email) est interrompue, demandez les infos (Nom, Email, Message) très brièvement.""",
         llm=llm,
         verbose=True,
         memory=False,
@@ -336,15 +333,16 @@ class IMTCrew:
 
         # Tâche 3: Interaction Utilisateur & Synthèse
         synthesis_task = Task(
-            description="""Synthèse finale et engagement pour la requête: '{query}'.
+            description="""Synthèse finale pour: '{query}'.
             
-            Instructions:
-            1. Si le Coordonnateur a signalé 'ACTION_INTERROMPUE', demande à l'utilisateur les informations manquantes (Nom, Email ou détails du message) de manière très courtoise. Explique pourquoi nous en avons besoin pour l'aider davantage.
-            2. Si l'action a réussi, partage la confirmation et les preuves.
-            3. Dans tous les cas, fournis une réponse complète et chaleureuse basée sur les recherches de l'Analyste.
-            4. Adopte un ton enthousiaste, professionnel et digne d'un représentant de l'IMT Dakar.""",
+            RÈGLES D'OR:
+            1. CONCISION EXTRÊME: Réponds en 2 PHRASES MAXIMUM (sauf si liste technique requise).
+            2. STRUCTURE: Si réponse longue, utilise des puces très courtes et aérées.
+            3. OUTILS: Propose l'envoi d'email ou le formulaire UNIQUEMENT si l'historique montre au moins 3 échanges ou si l'utilisateur semble perdu.
+            4. ACTION: Si 'ACTION_INTERROMPUE', demande 'Nom, Email, Message' sans détour.
+            5. SOURCE: Cite imt.sn brièvement.""",
             agent=self.manager,
-            expected_output="Réponse finale chaleureuse, informative, ou demande d'informations complémentaires.",
+            expected_output="Réponse courte, précise et professionnelle.",
             context=[research_task, action_task]
         )
         

@@ -285,30 +285,10 @@ def send_director_email(
     email_content = data.corps
     try:
         import litellm
-        groq_key = os.getenv("GROQ_API_KEY")
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+        from llm_utils import get_litellm_config, sanitize_env_keys
         
-        # Injection environnement pour litellm
-        if groq_key: os.environ["GROQ_API_KEY"] = groq_key.strip().lstrip('=')
-        if gemini_key: os.environ["GEMINI_API_KEY"] = gemini_key.strip().lstrip('=')
-        if xai_key: os.environ["XAI_API_KEY"] = xai_key.strip().lstrip('=')
-
-        if groq_key:
-            model_name = os.getenv("GROQ_MODEL") or "llama-3.3-70b-versatile"
-            primary = f"groq/{model_name.replace('groq/', '')}"
-            fallbacks = []
-            if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
-        elif gemini_key:
-            model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-            primary = f"gemini/{model_name.replace('gemini/', '')}"
-            fallbacks = ["gemini/gemini-2.0-flash"]
-        elif xai_key:
-            model_name = os.getenv("GROK_MODEL") or "grok-2-latest"
-            primary = f"xai/{model_name.replace('xai/', '')}"
-            fallbacks = []
-        else:
-            primary = None
+        sanitize_env_keys()
+        primary, fallbacks = get_litellm_config()
 
         if primary:
             prompt = f"""
