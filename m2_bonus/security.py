@@ -189,23 +189,13 @@ class RedisSecurityManager:
         """
         try:
             import litellm
+            from llm_utils import get_litellm_config, sanitize_env_keys
             
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+            sanitize_env_keys()
+            primary, fallbacks = get_litellm_config()
             
-            if not gemini_key and not xai_key:
+            if not primary:
                 return True, 1.0, "Clés API manquantes, validation ignorée"
-            
-            # Modèle primaire et fallbacks
-            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            if model_name.startswith("gemini/"):
-                model_name = model_name.replace("gemini/", "")
-
-            primary = f"gemini/{model_name}"
-            fallbacks = ["gemini/gemini-1.5-flash"]
-            if xai_key:
-                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
-                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
 
             prompt = f"""
             Analyse cette requête pour l'assistant IMT et évalue sa sécurité/intention.

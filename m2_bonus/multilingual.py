@@ -238,38 +238,18 @@ class MultilingualProcessor:
         """
         try:
             import litellm
-            import os
-            from dotenv import load_dotenv
+            from llm_utils import get_litellm_config, sanitize_env_keys
             
-            load_dotenv()
-            groq_key = os.getenv("GROQ_API_KEY")
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
-            
-            # Injection
-            if groq_key: os.environ["GROQ_API_KEY"] = groq_key.strip().lstrip('=')
-            if gemini_key: os.environ["GEMINI_API_KEY"] = gemini_key.strip().lstrip('=')
-            if xai_key: os.environ["XAI_API_KEY"] = xai_key.strip().lstrip('=')
+            sanitize_env_keys()
+            model, fallbacks = get_litellm_config()
 
-            if not any([groq_key, gemini_key, xai_key]):
+            if not model:
                 return self._fallback_translation(text, target_lang)
             
             lang_names = {'fr': 'français', 'en': 'anglais', 'wo': 'wolof', 'es': 'espagnol', 'ar': 'arabe'}
             target_name = lang_names.get(target_lang, 'français')
             
             prompt = f"Traduis ce texte en {target_name}. Conserve le sens exact.\n\nTexte: {text}\n\nTraduction:"
-            
-            # Définir le modèle primaire et fallbacks
-            if groq_key:
-                model = f"groq/{os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile').replace('groq/', '')}"
-                fallbacks = []
-                if gemini_key: fallbacks.append(f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}")
-            elif gemini_key:
-                model = f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}"
-                fallbacks = ["gemini/gemini-2.0-flash"]
-            else:
-                model = f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}"
-                fallbacks = []
             
             # Utiliser litellm pour la complétion avec fallbacks
             response = litellm.completion(

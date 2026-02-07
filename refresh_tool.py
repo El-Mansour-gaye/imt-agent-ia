@@ -87,14 +87,10 @@ Question : {query}
 
     try:
         import litellm
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-        primary = f"gemini/{model_name.replace('gemini/', '')}"
+        from llm_utils import get_litellm_config, sanitize_env_keys
 
-        fallbacks = ["gemini/gemini-1.5-flash"]
-        xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
-        if xai_key:
-            grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
-            fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+        sanitize_env_keys()
+        primary, fallbacks = get_litellm_config()
 
         response = litellm.completion(
             model=primary,

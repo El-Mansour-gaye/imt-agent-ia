@@ -70,19 +70,13 @@ class DirectorEmailGenerator:
         Returns:
             Dict avec subject, body, to_email
         """
-        # Tentative avec LLM (Gemini avec fallback Grok via LiteLLM)
+        # Tentative avec LLM (Groq > Gemini > Grok via LiteLLM)
         try:
             import litellm
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+            from llm_utils import get_litellm_config, sanitize_env_keys
 
-            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
-            primary = f"gemini/{model_name.replace('gemini/', '')}"
-
-            fallbacks = ["gemini/gemini-1.5-flash"]
-            if xai_key:
-                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
-                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+            sanitize_env_keys()
+            primary, fallbacks = get_litellm_config()
 
             prompt = f"""En tant qu'Assistant IA Officiel de l'IMT Dakar, rédigez un email institutionnel
             exemplaire destiné au Directeur de l'IMT.
