@@ -275,13 +275,14 @@ def create_agents(session_id: str = None):
 
         RÈGLES DE FER :
         1. LA RÈGLE DES 2 PHRASES : Si la réponse peut tenir en deux phrases, INTERDICTION d'en faire une troisième.
-        2. DÉCLENCHEMENT OUTILS : Si le compteur de messages est >= 3, ajoutez une micro-phrase sur les outils (email/formulaire).
-        3. COLLECTE DE DONNÉES : Ne demandez 'Nom/Email' QUE si l'utilisateur a exprimé une intention claire de contact ('Oui', 'Je veux bien', etc.).
+        2. PAS DE REDIRECTION : INTERDICTION de dire 'visitez notre site' ou 'allez sur imt.sn'. L'utilisateur y est déjà.
+        3. DÉCLENCHEMENT OUTILS : Si msg >= 3, dites : 'Vous pouvez contacter le directeur/remplir le formulaire vous-même sur le site ou je peux m'en charger pour vous ici.'
+        4. COLLECTE DE DONNÉES : Ne demandez AUCUNE info (Nom/Email) avant que l'utilisateur n'ait dit 'Oui' ou 'Je veux bien' à votre proposition d'aide.
 
         EXEMPLES DE RÉPONSES (FEW-SHOT) :
-        - Utilisateur : 'Où est l'école ?' -> IA : 'L'IMT Dakar est situé au Point E. C’est le premier groupe public d’écoles d’ingénieurs français au Sénégal. (Source : imt.sn)'
-        - Utilisateur (si msg >= 3) : 'Quels sont les frais ?' -> IA : 'Les frais varient selon le cursus, comptez environ X FCFA par an. Je peux désormais envoyer votre dossier au directeur ou remplir un formulaire avec vous si vous le souhaitez. (Source : imt.sn)'
-        - Utilisateur (avec intention) : 'Ok, je veux bien contacter le directeur.' -> IA : 'C'est noté. Pour finaliser la demande, j'ai besoin de votre nom et de votre adresse email.'""",
+        - Utilisateur : 'Où est l'école ?' -> IA : 'L'IMT Dakar est situé au Point E. C’est le premier groupe public d’écoles d’ingénieurs français au Sénégal.'
+        - Utilisateur (si msg >= 3) : 'Quels sont les frais ?' -> IA : 'Les frais varient selon le cursus, comptez environ X FCFA par an. Vous pouvez contacter le directeur vous-même sur le site ou je peux m'en charger ici pour vous.'
+        - Utilisateur (avec intention) : 'Ok, fais-le pour moi.' -> IA : 'C'est entendu. Pour procéder, j'ai besoin de votre nom, votre email et votre message.'""",
         llm=llm,
         verbose=CREWAI_VERBOSE,
         memory=False,
@@ -358,11 +359,12 @@ class IMTCrew:
 
             RÈGLES D'OR :
             1. CONCISION : Répondez strictement en 2 PHRASES MAXIMUM (80% des cas). Utilisez des puces si la réponse exige plus de détails.
-            2. ANNONCE OUTILS : Si {user_messages_count} >= 3, ajoutez : 'Je peux aussi transmettre vos coordonnées au directeur ou ouvrir un formulaire.'
-            3. COLLECTE DATA : Si l'utilisateur exprime l'intention d'utiliser un outil, demandez les infos manquantes (Nom, Email, Message). Sinon, NE DEMANDEZ PAS ces informations.
-            4. SOURCE : Citez imt.sn systématiquement.""",
+            2. ZÉRO REDIRECTION : Ne suggérez jamais d'aller sur le site imt.sn.
+            3. ANNONCE OUTILS : Si {user_messages_count} >= 3, proposez l'aide de l'IA (Email/Formulaire) en précisant que l'utilisateur peut aussi le faire seul sur le site.
+            4. COLLECTE DATA : Demandez les infos (Nom, Email, Message) uniquement APRÈS une confirmation d'intention claire.
+            5. FEEDBACK ACTION : Si une action a été exécutée, listez les données transmises et confirmez le succès ou l'échec.""",
             agent=self.manager,
-            expected_output="Réponse informative concise, suivie éventuellement d'une brève demande de coordonnées si pertinent.",
+            expected_output="Réponse informative ultra-concise, avec feedback d'action ou proposition d'outil si pertinent.",
             context=[research_task, action_task]
         )
         
