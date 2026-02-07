@@ -6,6 +6,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Import logger centralisé
+try:
+    from logger import log_info, log_warn
+except ImportError:
+    def log_info(m): pass
+    def log_warn(m): print(m)
+
 
 class LangfuseTracer:
     """Integrate Langfuse for LLM observability"""
@@ -21,9 +28,9 @@ class LangfuseTracer:
                 secret_key=self.secret_key,
                 host=self.host
             )
-            print(f"✅ Langfuse connecté: {self.host}")
+            log_info(f"✅ Langfuse connecté: {self.host}")
         else:
-            print("⚠️ Langfuse keys manquantes")
+            log_warn("⚠️ Langfuse keys manquantes")
             self.langfuse = None
 
     def start_trace(self, name: str):

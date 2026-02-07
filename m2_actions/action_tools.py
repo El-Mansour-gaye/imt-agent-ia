@@ -10,6 +10,14 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 from dotenv import load_dotenv
+
+# Import logger centralisé
+try:
+    from logger import log_info, log_warn, log_error
+except ImportError:
+    def log_info(m): pass
+    def log_warn(m): print(m)
+    def log_error(m): print(m)
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -60,7 +68,7 @@ def fill_contact_form(
     Returns:
         Dict avec statut et preuve
     """
-    print(f"📝 Tentative de remplissage formulaire pour: {nom}")
+    log_info(f"📝 Tentative de remplissage formulaire pour: {nom}")
     
     # Validation des données
     data = ContactFormData(
@@ -93,14 +101,14 @@ def fill_contact_form(
                 
                 try:
                     # Naviguer vers la page
-                    print(f"🌐 Navigation vers: {url}")
+                    log_info(f"🌐 Navigation vers: {url}")
                     page.goto(url, wait_until="networkidle", timeout=30000)
                     
                     # Attendre que le formulaire soit chargé
                     page.wait_for_selector("form", timeout=10000)
                     
                     # Remplir les champs (sélecteurs flexibles)
-                    print("🖊️  Remplissage des champs...")
+                    log_info("🖊️  Remplissage des champs...")
                     
                     # Essayer différents sélecteurs pour chaque champ
                     selectors_nom = [
@@ -142,9 +150,9 @@ def fill_contact_form(
                         for selector in selectors_list:
                             if page.locator(selector).count() > 0:
                                 page.fill(selector, value)
-                                print(f"  ✅ {field_name} rempli avec: {value}")
+                                log_info(f"  ✅ {field_name} rempli avec: {value}")
                                 return True
-                        print(f"  ⚠️ {field_name}: aucun sélecteur trouvé")
+                        log_warn(f"  ⚠️ {field_name}: aucun sélecteur trouvé")
                         return False
                     
                     # Remplir tous les champs
@@ -162,7 +170,7 @@ def fill_contact_form(
                     
                     screenshot_path = screenshot_dir / f"form_{timestamp}.png"
                     page.screenshot(path=str(screenshot_path))
-                    print(f"📸 Screenshot sauvegardé: {screenshot_path}")
+                    log_info(f"📸 Screenshot sauvegardé: {screenshot_path}")
                     
                     # Chercher le bouton submit
                     submit_selectors = [
@@ -176,7 +184,7 @@ def fill_contact_form(
                     submitted = False
                     for selector in submit_selectors:
                         if page.locator(selector).count() > 0:
-                            print(f"🔘 Clic sur bouton: {selector}")
+                            log_info(f"🔘 Clic sur bouton: {selector}")
                             page.click(selector)
                             
                             # Attendre un peu après soumission
@@ -185,7 +193,7 @@ def fill_contact_form(
                             break
                     
                     if not submitted:
-                        print("⚠️ Bouton submit non trouvé, simulation de soumission")
+                        log_warn("⚠️ Bouton submit non trouvé, simulation de soumission")
                     
                     # Prendre un screenshot après soumission
                     screenshot_after = screenshot_dir / f"form_{timestamp}_after.png"
@@ -205,17 +213,17 @@ def fill_contact_form(
                     }
                     
                 except PlaywrightTimeoutError:
-                    print("❌ Timeout lors du chargement de la page")
+                    log_error("❌ Timeout lors du chargement de la page")
                     browser.close()
                     raise
                 except Exception as e:
-                    print(f"❌ Erreur Playwright: {e}")
+                    log_error(f"❌ Erreur Playwright: {e}")
                     if 'browser' in locals():
                         browser.close()
                     raise
         
         # Mode simulation (fallback)
-        print("🔄 Mode simulation activé")
+        log_info("🔄 Mode simulation activé")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         
         # Créer un faux screenshot
@@ -246,7 +254,7 @@ def fill_contact_form(
         
     except Exception as e:
         error_msg = f"Erreur lors du remplissage du formulaire: {str(e)}"
-        print(f"❌ {error_msg}")
+        log_error(f"❌ {error_msg}")
         
         return {
             "status": "error",
@@ -272,7 +280,7 @@ def send_director_email(
     Returns:
         Dict avec statut d'envoi
     """
-    print(f"📧 Préparation email pour: {destinataire}")
+    log_info(f"📧 Préparation email pour: {destinataire}")
     
     # Validation des données
     data = EmailData(
@@ -315,9 +323,9 @@ def send_director_email(
                 temperature=0.3
             )
             email_content = response.choices[0].message.content
-            print("✅ Email professionnel généré avec LLM")
+            log_info("✅ Email professionnel généré avec LLM")
     except Exception as e:
-        print(f"⚠️ Génération LLM échouée: {e}, utilisation du texte original")
+        log_warn(f"⚠️ Génération LLM échouée: {e}, utilisation du texte original")
     
     try:
         # Préparer le contenu HTML (remplacer les sauts de ligne par <br>)
@@ -368,7 +376,7 @@ def send_director_email(
                 sg = SendGridAPIClient(sendgrid_key)
                 response = sg.send(message)
                 
-                print(f"✅ Email envoyé via SendGrid, statut: {response.status_code}")
+                log_info(f"✅ Email envoyé via SendGrid, statut: {response.status_code}")
                 
                 return {
                     "status": "sent",
@@ -382,7 +390,7 @@ def send_director_email(
                 }
                 
             except Exception as e:
-                print(f"⚠️ SendGrid échoué: {e}, essai SMTP")
+                log_warn(f"⚠️ SendGrid échoué: {e}, essai SMTP")
         
         # Fallback: SMTP Gmail
         gmail_user = os.getenv("GMAIL_EMAIL")
@@ -423,7 +431,7 @@ def send_director_email(
                     server.login(gmail_user, gmail_password)
                     server.send_message(msg)
                 
-                print(f"✅ Email envoyé via SMTP Gmail à {data.destinataire}")
+                log_info(f"✅ Email envoyé via SMTP Gmail à {data.destinataire}")
                 
                 return {
                     "status": "sent",
@@ -435,10 +443,10 @@ def send_director_email(
                 }
                 
             except Exception as e:
-                print(f"⚠️ SMTP Gmail échoué: {e}")
+                log_warn(f"⚠️ SMTP Gmail échoué: {e}")
         
         # Fallback final: simulation
-        print("🔄 Mode simulation email (aucune clé SMTP/SendGrid)")
+        log_info("🔄 Mode simulation email (aucune clé SMTP/SendGrid)")
         
         # Sauvegarder l'email simulé
         sim_dir = Path("emails_simulated")
@@ -469,7 +477,7 @@ def send_director_email(
         
     except Exception as e:
         error_msg = f"Erreur lors de l'envoi de l'email: {str(e)}"
-        print(f"❌ {error_msg}")
+        log_error(f"❌ {error_msg}")
         
         return {
             "status": "error",

@@ -6,6 +6,14 @@ import chromadb
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# Import logger centralisé
+try:
+    from logger import log_info, log_warn, log_error
+except ImportError:
+    def log_info(m): pass
+    def log_warn(m): print(m)
+    def log_error(m): print(m)
+
 # Suppress ChromaDB telemetry
 os.environ["CHROMA_TELEMETRY_IMPL"] = "0"
 
@@ -58,7 +66,7 @@ def split_text(text, max_tokens=512, overlap_tokens=102):
 
 def index_documents(json_file, rebuild=False):
     if not os.path.exists(json_file):
-        print(f"Error: {json_file} not found.")
+        log_error(f"Error: {json_file} not found.")
         return 0
 
     with open(json_file, 'r', encoding='utf-8') as f:
@@ -96,12 +104,12 @@ def index_documents(json_file, rebuild=False):
             all_ids.append(chunk_id)
 
     if not all_chunks:
-        print("No chunks to index.")
+        log_warn("No chunks to index.")
         return 0
 
     # Gemini Embeddings
     if not GEMINI_API_KEY:
-        print("GEMINI_API_KEY not set. Cannot index embeddings.")
+        log_error("GEMINI_API_KEY not set. Cannot index embeddings.")
         return 0
 
     # Chroma can take a list of embeddings. We'll generate them in batches.
@@ -125,7 +133,7 @@ def index_documents(json_file, rebuild=False):
             ids=batch_ids
         )
 
-    print(f"Indexed {len(all_chunks)} chunks in ChromaDB")
+    log_info(f"Indexed {len(all_chunks)} chunks in ChromaDB")
     return len(all_chunks)
 
 def imt_rag_search(query: str):
