@@ -28,7 +28,6 @@ from voice import stt_from_audio, tts_to_audio
 
 # Intégration M2 - CrewAI & Actions
 from m2_crewai.crewai_config import get_imt_crew
-from m2_actions.action_tools import fill_contact_form, send_director_email
 
 # =========================
 # UTILITAIRES
@@ -98,14 +97,18 @@ async def on_message(message: cl.Message):
 # =========================
 @cl.action_callback("fill_form")
 async def fill_form_callback(action):
-    result = await cl.make_async(fill_contact_form)(
-        nom="Utilisateur", email="user@imt.sn", message="Info"
-    )
-    await cl.Message(content=f"📝 Statut formulaire: {result['status']}").send()
+    session_id = cl.user_session.get("session_id")
+    query = "Je souhaite remplir le formulaire de contact."
+    await cl.Message(content=f"📝 **Action demandée :** {query}").send()
+    await cl.Message(content="🤖 Analyse en cours...").send()
+    response = await handle_agent(session_id, query)
+    await cl.Message(content=response).send()
 
 @cl.action_callback("send_email")
 async def send_email_callback(action):
-    result = await cl.make_async(send_director_email)(
-        sujet="Info", corps="Demande d'info"
-    )
-    await cl.Message(content=f"📧 Statut email: {result['status']}").send()
+    session_id = cl.user_session.get("session_id")
+    query = "Je souhaite envoyer un email au directeur."
+    await cl.Message(content=f"📧 **Action demandée :** {query}").send()
+    await cl.Message(content="🤖 Analyse en cours...").send()
+    response = await handle_agent(session_id, query)
+    await cl.Message(content=response).send()
