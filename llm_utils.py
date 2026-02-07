@@ -23,8 +23,8 @@ def get_litellm_config() -> Tuple[Optional[str], List[str]]:
         return primary, fallbacks
 
     if gemini_key:
-        primary = f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-flash-latest').replace('gemini/', '')}"
-        fallbacks = ["gemini/gemini-2.0-flash"]
+        primary = f"gemini/{os.getenv('GEMINI_MODEL', 'gemini-2.0-flash').replace('gemini/', '')}"
+        fallbacks = ["gemini/gemini-flash-latest"]
         if groq_key: fallbacks.insert(0, f"groq/{os.getenv('GROQ_MODEL', 'llama-3.3-70b-versatile').replace('groq/', '')}")
         if xai_key: fallbacks.append(f"xai/{os.getenv('GROK_MODEL', 'grok-2-latest').replace('xai/', '')}")
         return primary, fallbacks
