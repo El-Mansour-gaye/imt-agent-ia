@@ -195,7 +195,9 @@ class RedisSecurityManager:
                 return True, 1.0, "GEMINI_API_KEY manquante, validation ignorée"
             
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            # Utilisation du modèle flash-latest plus stable
+            model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+            model = genai.GenerativeModel(model_name)
             
             prompt = f"""
             Analyse cette requête pour l'assistant IMT et évalue sa sécurité/intention.
@@ -259,7 +261,13 @@ class RedisSecurityManager:
                     
         except Exception as e:
             print(f"⚠️ Erreur validation Gemini: {e}")
-            return True, 0.5, f"Erreur validation: {str(e)[:50]}"
+            # En cas d'erreur technique (quota, etc.), on effectue une validation par mots-clés
+            # pour ne pas bloquer l'utilisateur inutilement.
+            safe_keywords = ['frais', 'formation', 'inscription', 'contact', 'imt', 'dakar', 'salut', 'bonjour', 'aide']
+            query_lower = query.lower()
+            if any(safe in query_lower for safe in safe_keywords):
+                return True, 0.9, "Validation par mots-clés (Fallback technique)"
+            return True, 0.5, f"Erreur validation (neutre): {str(e)[:50]}"
     
     def simulate_captcha(self, session_id: str) -> Dict[str, Any]:
         """

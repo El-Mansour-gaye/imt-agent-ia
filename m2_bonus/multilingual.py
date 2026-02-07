@@ -232,57 +232,70 @@ class MultilingualProcessor:
         
         return result
     
-    def translate_with_gemini(self, text: str, source_lang: str = 'en', target_lang: str = 'fr') -> str:
+    def translate_with_llm(self, text: str, source_lang: str = 'en', target_lang: str = 'fr') -> str:
         """
-        Traduction avec Gemini API
-        
-        Args:
-            text: Texte à traduire
-            source_lang: Langue source
-            target_lang: Langue cible
-            
-        Returns:
-            Texte traduit
+        Traduction avec LLM (Gemini avec fallback Grok via LiteLLM)
         """
         try:
-            import google.generativeai as genai
+            import litellm
             import os
             from dotenv import load_dotenv
             
             load_dotenv()
-            api_key = os.getenv("GEMINI_API_KEY")
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
             
-            if not api_key:
+            if not gemini_key and not xai_key:
                 return self._fallback_translation(text, target_lang)
             
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.5-flash')
-            
-            lang_names = {
-                'fr': 'français',
-                'en': 'anglais',
-                'wo': 'wolof',
-                'es': 'espagnol',
-                'ar': 'arabe'
-            }
-            
+            lang_names = {'fr': 'français', 'en': 'anglais', 'wo': 'wolof', 'es': 'espagnol', 'ar': 'arabe'}
             target_name = lang_names.get(target_lang, 'français')
             
-            prompt = f"""
-            Traduis ce texte en {target_name}. 
-            Conserve le sens exact, surtout pour les termes techniques liés à l'éducation.
+            prompt = f"Traduis ce texte en {target_name}. Conserve le sens exact.\n\nTexte: {text}\n\nTraduction:"
             
-            Texte: {text}
+            # Définir le modèle primaire et fallbacks
+            model = "gemini/gemini-1.5-flash"
+            if os.getenv("GEMINI_MODEL"):
+                model = f"gemini/{os.getenv('GEMINI_MODEL').replace('gemini/', '')}"
             
-            Traduction en {target_name}:
-            """
+            fallbacks = ["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash-exp"]
+            if xai_key:
+                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
+                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
             
-            response = model.generate_content(prompt)
-            return response.text.strip()
+            # Utiliser litellm pour la complétion avec fallbacks
+            response = litellm.completion(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                fallback_models=fallbacks,
+                temperature=0.3
+            )
+            return response.choices[0].message.content.strip()
             
         except Exception as e:
-            print(f"⚠️ Traduction Gemini échouée: {e}")
+            print(f"⚠️ Traduction LLM échouée: {e}")
+            # Tentative via google-generativeai direct si litellm échoue (cas où litellm n'est pas là)
+            return self.translate_with_gemini_direct(text, source_lang, target_lang)
+
+    def translate_with_gemini_direct(self, text: str, source_lang: str = 'en', target_lang: str = 'fr') -> str:
+        """Fallback direct sur l'API Gemini si LiteLLM échoue"""
+        try:
+            import google.generativeai as genai
+            import os
+            api_key = os.getenv("GEMINI_API_KEY")
+            if not api_key: return self._fallback_translation(text, target_lang)
+            
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            prompt = f"Traduis en {target_lang}: {text}"
+            response = model.generate_content(prompt)
+            return response.text.strip()
+        except:
             return self._fallback_translation(text, target_lang)
+
+    def translate_with_gemini(self, text: str, source_lang: str = 'en', target_lang: str = 'fr') -> str:
+        """Maintenu pour compatibilité, redirige vers translate_with_llm"""
+        return self.translate_with_llm(text, source_lang, target_lang)
     
     def _fallback_translation(self, text: str, target_lang: str) -> str:
         """Traduction de fallback simple"""

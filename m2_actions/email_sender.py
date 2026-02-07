@@ -70,25 +70,46 @@ class DirectorEmailGenerator:
         Returns:
             Dict avec subject, body, to_email
         """
-        # Placeholder pour Gemini (si disponible)
+        # Tentative avec Grok (xAI) ou Gemini
         try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-            llm = ChatGoogleGenerativeAI(
-                model=os.getenv("GEMINI_MODEL", "gemini-1.5-pro"),
-                google_api_key=os.getenv("GEMINI_API_KEY"),
-                temperature=0.5
-            )
+            xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+            if xai_api_key:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(
+                    model=os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest"),
+                    api_key=xai_api_key,
+                    base_url="https://api.x.ai/v1",
+                    temperature=0.5
+                )
+            else:
+                from langchain_google_genai import ChatGoogleGenerativeAI
+                llm = ChatGoogleGenerativeAI(
+                    model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+                    google_api_key=os.getenv("GEMINI_API_KEY"),
+                    temperature=0.5
+                )
+
+            prompt = f"""En tant qu'Assistant IA Officiel de l'IMT Dakar, rédigez un email institutionnel
+            exemplaire destiné au Directeur de l'IMT.
             
-            prompt = f"""Tu es un assistant professionnel pour l'IMT de Dakar.
-            Génère un email FORMEL ET COURT (max 200 mots) au Directeur IMT basé sur cette demande:
+            DÉTAILS DE LA REQUÊTE :
+            - Objet de la demande : {user_request}
+            - Identité de l'étudiant/prospect : {user_name}
+            - Contexte additionnel : {context or 'Demande d'information générale'}
             
-            Demande: {user_request}
-            Nom utilisateur: {user_name}
-            Contexte: {context or 'Demande générale'}
+            EXIGENCES :
+            1. TON : Formel, respectueux, académique et courtois.
+            2. STRUCTURE :
+               - Salutations distinguées.
+               - Présentation claire de la demande.
+               - Argumentation succincte si nécessaire.
+               - Formule de politesse finale.
+            3. LONGUEUR : Concis mais complet (max 250 mots).
+            4. LANGUE : Français soutenu.
             
-            Retourne le résultat en format:
-            SUJET: [sujet court]
-            CORPS: [corps du message]"""
+            FORMAT DE RÉPONSE ATTENDU (STRICT) :
+            SUJET : [Sujet clair et explicite]
+            CORPS : [Contenu de l'email]"""
             
             response = llm.invoke(prompt)
             email_content = response.content

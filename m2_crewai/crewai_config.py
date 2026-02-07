@@ -34,7 +34,6 @@ try:
         memory_manager = VolatileMemoryManager()
 except (ImportError, Exception) as e:
     print(f"⚠️ Erreur chargement Redis: {e}, mode mémoire volatile")
-    from .crew_memory import VolatileMemoryManager
     memory_manager = VolatileMemoryManager()
 
 # Import tracing Langfuse
@@ -50,26 +49,68 @@ load_dotenv()
 
 # ==================== CONFIGURATION LLM ====================
 def get_llm():
-    """Configure l'LLM via l'interface native de CrewAI"""
-    api_key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-    
-    if not api_key:
-        print("⚠️ GEMINI_API_KEY manquante, mode simulation (certaines actions peuvent échouer)")
-        return None
-    
-    try:
-        # CrewAI 1.x recommande d'utiliser l'objet LLM interne
-        # qui gère mieux LiteLLM et les fallbacks
-        return LLM(
-            model=f"gemini/{model_name}",
-            api_key=api_key,
-            temperature=0.7,
-            max_tokens=2000
-        )
-    except Exception as e:
-        print(f"❌ Erreur initialisation LLM: {e}")
-        return None
+    """Configure l'LLM via l'interface native de CrewAI (Gemini par défaut, Grok en fallback)"""
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+
+    # Construction de la liste de modèles et fallbacks
+    if gemini_api_key:
+        # Priorité à Gemini
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # Nettoyage si l'utilisateur a mis 'gemini/' dans son .env
+        if model_name.startswith("gemini/"):
+            model_name = model_name.replace("gemini/", "")
+        
+        primary = f"gemini/{model_name}"
+
+        # Fallbacks intelligents
+        fallbacks = []
+        if xai_api_key:
+            grok_model = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
+            # Nettoyage si 'xai/' présent
+            if grok_model.startswith("xai/"):
+                grok_model = grok_model.replace("xai/", "")
+            fallbacks.append(f"xai/{grok_model}")
+        
+        # Ajouter d'autres versions de Gemini en dernier recours
+        for g_model in ["gemini-1.5-flash", "gemini-2.0-flash-exp"]:
+            if f"gemini/{g_model}" != primary:
+                fallbacks.append(f"gemini/{g_model}")
+
+        # Nettoyage fallbacks
+        unique_fallbacks = []
+        for f in fallbacks:
+            if f not in unique_fallbacks and f != primary:
+                unique_fallbacks.append(f)
+
+        print(f"🪄 Configuration Gemini ({model_name}) - Fallback Grok: {bool(xai_api_key)}")
+        try:
+            return LLM(
+                model=primary,
+                fallback_models=unique_fallbacks,
+                api_key=gemini_api_key,
+                temperature=0.4,
+                max_tokens=2000
+            )
+        except Exception as e:
+            print(f"⚠️ Erreur initialisation Gemini: {e}")
+
+    if xai_api_key:
+        # Grok si Gemini non dispo
+        model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
+        print(f"🚀 Configuration Grok ({model_name}) par défaut")
+        try:
+            return LLM(
+                model=f"xai/{model_name}",
+                api_key=xai_api_key,
+                temperature=0.4,
+                max_tokens=2000
+            )
+        except Exception as e:
+            print(f"⚠️ Erreur initialisation Grok: {e}")
+
+    print("❌ Aucune clé API valide trouvée (GEMINI_API_KEY ou XAI_API_KEY)")
+    return None
 
 llm = get_llm()
 
@@ -186,10 +227,13 @@ def create_agents(session_id: str = None):
     
     # Agent 1: Researcher (RAG)
     researcher = Agent(
-        role="Expert Recherche IMT Dakar",
-        goal="Trouver des informations précises et vérifiées sur les formations, frais, procédures de l'IMT",
-        backstory="""Spécialiste de l'IMT avec 10 ans d'expérience, accès à toutes les bases de données
-        de l'institut. Méticuleux, précis, et toujours à jour sur les informations officielles.""",
+        role="Analyste Expert IMT Dakar",
+        goal="Fournir des informations précises sur l'IMT et identifier si une action (contact/email) est pertinente.",
+        backstory="""Vous êtes l'Analyste Principal de l'IMT Dakar. Votre expertise couvre tous les programmes,
+        les frais de scolarité et les processus d'admission. Votre rôle est de fournir des réponses basées
+        uniquement sur les faits extraits du RAG. De plus, vous devez détecter si la requête de l'utilisateur
+        nécessite une escalade via le formulaire de contact ou un email au directeur. Si une action est nécessaire,
+        vous vérifiez scrupuleusement si nous avons déjà le NOM, l'EMAIL et le MESSAGE de l'utilisateur.""",
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=True,
@@ -199,10 +243,12 @@ def create_agents(session_id: str = None):
     
     # Agent 2: Actioneer (Actions pratiques)
     actioneer = Agent(
-        role="Assistant Actions Automatisées IMT",
-        goal="Exécuter des actions pratiques comme remplir des formulaires, envoyer des emails, et traiter les demandes",
-        backstory="""Assistant technique expert en automatisation, maîtrise parfaite des outils web
-        et des protocoles de communication. Pragmatique et efficace.""",
+        role="Coordonnateur d'Actions IMT",
+        goal="Exécuter les outils d'automatisation uniquement lorsque toutes les données requises sont présentes.",
+        backstory="""Vous êtes un expert en exécution technique. Votre rigueur est absolue : vous ne déclenchez
+        jamais une action (formulaire ou email) s'il manque une information clé (nom, email ou corps du message).
+        Si des informations manquent, vous listez précisément ce qui fait défaut au lieu d'utiliser un outil.
+        Votre succès se mesure à la précision de vos rapports d'exécution.""",
         tools=[formulaire_contact_tool, email_directeur_tool],
         llm=llm,
         verbose=True,
@@ -210,12 +256,14 @@ def create_agents(session_id: str = None):
         max_iter=2
     )
     
-    # Agent 3: Manager (Coordination)
+    # Agent 3: Manager (Coordination & Synthèse)
     manager = Agent(
-        role="Manager de Processus IMT",
-        goal="Coordonner les agents pour fournir une réponse complète et exécuter les actions demandées",
-        backstory="""Manager expérimenté en gestion de projets éducatifs. Excellente capacité d'analyse
-        et de planification. S'assure que toutes les demandes sont traitées de manière optimale.""",
+        role="Directeur de la Relation Étudiant IMT",
+        goal="Assurer une expérience utilisateur fluide, chaleureuse et collecter les informations manquantes.",
+        backstory="""Vous êtes le visage de l'IMT Dakar. Votre priorité est la satisfaction de l'utilisateur.
+        Vous synthétisez le travail de l'Analyste et du Coordonnateur d'Actions. Si une action était prévue mais
+        qu'il manquait des informations (nom, email, etc.), vous les demandez avec courtoisie et professionnalisme
+        à l'utilisateur. Vos réponses doivent être engageantes et encourager l'interaction.""",
         llm=llm,
         verbose=True,
         memory=False,
@@ -245,7 +293,7 @@ class IMTCrew:
             process=Process.sequential,
             verbose=True,
             memory=False,
-            full_output=True
+            full_output=False
         )
         
         # Démarrer le trace Langfuse
@@ -253,74 +301,57 @@ class IMTCrew:
             tracer.start_trace(f"imt_session_{self.session_id}")
     
     def _create_tasks(self):
-        """Crée les tâches pour les agents"""
+        """Crée les tâches pour les agents avec gestion de collecte d'informations"""
         
-        # Tâche 1: Recherche (Researcher)
+        # Tâche 1: Analyse & Recherche
         research_task = Task(
-            description="""Analyse la requête utilisateur et recherche des informations précises.
-            
-            Requête: {query}
+            description="""Analyse approfondie de la requête: '{query}'.
             
             {context}
             
             Instructions:
-            1. Identifie le type d'information demandée (frais, inscriptions, contacts, formations)
-            2. Utilise l'outil de recherche RAG pour obtenir des informations fiables
-            3. Structure la réponse de manière claire avec sources
-            4. Identifie si une action est nécessaire (formulaire, email)
-            
-            Format de sortie:
-            - Titre de la section
-            - Informations principales
-            - Sources/citations
-            - Actions recommandées (si applicable)""",
+            1. RECHERCHE: Utilise le RAG pour trouver des réponses précises sur l'IMT.
+            2. DIAGNOSTIC: L'utilisateur a-t-il besoin d'une action de contact (formulaire/email) ?
+            3. VÉRIFICATION: Si une action est nécessaire, vérifie si nous avons dans le contexte ou la requête:
+               - Le Nom complet
+               - L'Email
+               - Le Message spécifique
+            4. SORTIE: Fournis la réponse informative et liste CLAIREMENT les données manquantes pour une éventuelle action.""",
             agent=self.researcher,
-            expected_output="Informations structurées avec sources et recommandations d'action",
+            expected_output="Analyse de la requête, informations extraites et inventaire des données utilisateur disponibles.",
             output_file="outputs/research_result.md"
         )
         
-        # Tâche 2: Planification (Manager)
-        planning_task = Task(
-            description="""Analyse les résultats de recherche fournis par le Researcher et planifie les actions nécessaires pour répondre à la requête utilisateur: '{query}'.
-            
-            Instructions:
-            1. Évalue si une action concrète est requise (remplir le formulaire de contact ou envoyer un email au directeur).
-            2. Si une action est requise, détermine précisément le type d'action et extrait les données nécessaires des résultats de recherche ou du contexte.
-            3. Prépare un plan d'exécution clair pour l'Actioneer.
-            4. Si aucune action n'est requise, explique pourquoi la réponse du Researcher est suffisante.
-            
-            Format de sortie:
-            - Évaluation de la demande
-            - Plan d'action détaillé (si applicable)
-            - Instructions précises pour l'Actioneer (paramètres à utiliser pour les outils)""",
-            agent=self.manager,
-            expected_output="Un plan d'action détaillé incluant les paramètres pour les outils de l'Actioneer",
-            context=[research_task],
-            output_file="outputs/action_plan.md"
-        )
-        
-        # Tâche 3: Exécution (Actioneer)
+        # Tâche 2: Exécution de l'Action (Conditionnelle)
         action_task = Task(
-            description="""Exécute les actions planifiées par le Manager pour la requête: '{query}'.
+            description="""Décision d'exécution pour la requête: '{query}'.
             
             Instructions:
-            1. Suis rigoureusement le plan d'action et les instructions du Manager.
-            2. Utilise les outils appropriés (formulaire de contact ou email au directeur) avec les paramètres fournis.
-            3. En cas d'informations manquantes pour un outil (ex: email de l'utilisateur), utilise des valeurs par défaut cohérentes ou signale le manque.
-            4. Fournis une confirmation d'exécution détaillée avec les preuves de succès (status, screenshots, etc.).
-            5. Signale toute erreur technique rencontrée lors de l'exécution.
-            
-            Format de sortie:
-            - Rapport de confirmation d'exécution
-            - Détails des résultats/preuves fournis par les outils
-            - Statut final de l'opération""",
+            1. Analyse l'inventaire des données fourni par le Researcher.
+            2. Si une action est requise ET que TOUTES les données (Nom, Email, Message) sont présentes, exécute l'outil approprié.
+            3. S'il manque ne serait-ce qu'une information, N'UTILISE AUCUN OUTIL et indique précisément : 'ACTION_INTERROMPUE: Manque [liste des champs]'.
+            4. Si aucune action n'est demandée, indique 'STATUT: Information uniquement'.""",
             agent=self.actioneer,
-            expected_output="Rapport d'exécution complet avec statut de succès ou d'échec et preuves",
-            context=[planning_task],
+            expected_output="Résultat de l'outil ou rapport d'interruption pour données manquantes.",
+            context=[research_task],
             output_file="outputs/execution_report.md"
         )
+
+        # Tâche 3: Interaction Utilisateur & Synthèse
+        synthesis_task = Task(
+            description="""Synthèse finale et engagement pour la requête: '{query}'.
+            
+            Instructions:
+            1. Si le Coordonnateur a signalé 'ACTION_INTERROMPUE', demande à l'utilisateur les informations manquantes (Nom, Email ou détails du message) de manière très courtoise. Explique pourquoi nous en avons besoin pour l'aider davantage.
+            2. Si l'action a réussi, partage la confirmation et les preuves.
+            3. Dans tous les cas, fournis une réponse complète et chaleureuse basée sur les recherches de l'Analyste.
+            4. Adopte un ton enthousiaste, professionnel et digne d'un représentant de l'IMT Dakar.""",
+            agent=self.manager,
+            expected_output="Réponse finale chaleureuse, informative, ou demande d'informations complémentaires.",
+            context=[research_task, action_task]
+        )
         
-        return [research_task, planning_task, action_task]
+        return [research_task, action_task, synthesis_task]
     
     def kickoff(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
