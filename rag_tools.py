@@ -177,3 +177,12 @@ def imt_rag_search(query: str):
             })
 
     return formatted_results
+
+def get_collection_stats():
+    """Returns the number of chunks in the collection."""
+    try:
+        client_chroma = chromadb.PersistentClient(path=CHROMA_PATH)
+        collection = client_chroma.get_collection(name="imt_docs")
+        return collection.count()
+    except Exception:
+        return 0

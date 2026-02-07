@@ -23,8 +23,24 @@ redis_client = redis.Redis(
     socket_connect_timeout=1 # Evite d'attendre trop longtemps si Redis est mort
 )
 
-# Fallback en mémoire vive (RAM) si Redis est indisponible
-_memory_fallback = {}
+# Fallback persistant (JSON) si Redis est indisponible
+SESSION_FILE = "sessions.json"
+
+def _load_sessions():
+    if os.path.exists(SESSION_FILE):
+        try:
+            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def _save_sessions(data):
+    try:
+        with open(SESSION_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving sessions: {e}")
 
 # =========================
 # STOCKAGE DES MESSAGES
@@ -40,9 +56,11 @@ def save_message(session_id: str, role: str, content: str):
     try:
         redis_client.rpush(key, json.dumps(message))
     except Exception:
-        if key not in _memory_fallback:
-            _memory_fallback[key] = []
-        _memory_fallback[key].append(json.dumps(message))
+        data = _load_sessions()
+        if key not in data:
+            data[key] = []
+        data[key].append(json.dumps(message))
+        _save_sessions(data)
 
 
 def get_last_messages(session_id: str, limit: int = 10) -> List[Dict]:
@@ -51,7 +69,8 @@ def get_last_messages(session_id: str, limit: int = 10) -> List[Dict]:
         raw = redis_client.lrange(key, -limit, -1)
         return [json.loads(m) for m in raw]
     except Exception:
-        raw = _memory_fallback.get(key, [])[-limit:]
+        data = _load_sessions()
+        raw = data.get(key, [])[-limit:]
         return [json.loads(m) for m in raw]
 
 
@@ -61,7 +80,8 @@ def get_all_messages(session_id: str) -> List[Dict]:
         raw = redis_client.lrange(key, 0, -1)
         return [json.loads(m) for m in raw]
     except Exception:
-        raw = _memory_fallback.get(key, [])
+        data = _load_sessions()
+        raw = data.get(key, [])
         return [json.loads(m) for m in raw]
 
 
@@ -70,7 +90,8 @@ def count_messages(session_id: str) -> int:
     try:
         return redis_client.llen(key)
     except Exception:
-        return len(_memory_fallback.get(key, []))
+        data = _load_sessions()
+        return len(data.get(key, []))
 
 # =========================
 # RÉSUMÉ AUTOMATIQUE
@@ -81,7 +102,9 @@ def save_summary(session_id: str, summary: str):
     try:
         redis_client.set(key, summary)
     except Exception:
-        _memory_fallback[key] = summary
+        data = _load_sessions()
+        data[key] = summary
+        _save_sessions(data)
 
 
 def get_summary(session_id: str) -> Optional[str]:
@@ -89,7 +112,8 @@ def get_summary(session_id: str) -> Optional[str]:
     try:
         return redis_client.get(key)
     except Exception:
-        return _memory_fallback.get(key)
+        data = _load_sessions()
+        return data.get(key)
 
 # =========================
 # CONTEXTE POUR AGENT IA
