@@ -54,12 +54,12 @@ def get_llm():
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
     if xai_api_key:
         model_name = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
-        print(f"🚀 Utilisation de Grok via xAI ({model_name})")
+        print(f"🚀 Configuration Grok ({model_name})")
         try:
             return LLM(
                 model=f"xai/{model_name}",
                 api_key=xai_api_key,
-                temperature=0.7,
+                temperature=0.4, # Plus de rigueur pour l'agent métier
                 max_tokens=2000
             )
         except Exception as e:
@@ -69,9 +69,10 @@ def get_llm():
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     if gemini_api_key:
         model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-        print(f"🪄 Utilisation de Gemini ({model_name})")
+        print(f"🪄 Configuration Gemini ({model_name})")
 
-        fallbacks = [f"gemini/{model_name}", "gemini/gemini-flash-latest", "gemini/gemini-2.0-flash", "gemini/gemini-pro"]
+        # gemini-flash-latest est plus stable et résistant aux quotas
+        fallbacks = ["gemini/gemini-flash-latest", "gemini/gemini-2.0-flash", "gemini/gemini-pro"]
         unique_fallbacks = []
         for f in fallbacks:
             if f not in unique_fallbacks: unique_fallbacks.append(f)
@@ -81,7 +82,7 @@ def get_llm():
                 model=unique_fallbacks[0],
                 fallback_models=unique_fallbacks[1:],
                 api_key=gemini_api_key,
-                temperature=0.7,
+                temperature=0.4,
                 max_tokens=2000
             )
         except Exception as e:
@@ -205,10 +206,13 @@ def create_agents(session_id: str = None):
     
     # Agent 1: Researcher (RAG)
     researcher = Agent(
-        role="Expert Recherche IMT Dakar",
-        goal="Trouver des informations précises et vérifiées sur les formations, frais, procédures de l'IMT",
-        backstory="""Spécialiste de l'IMT avec 10 ans d'expérience, accès à toutes les bases de données
-        de l'institut. Méticuleux, précis, et toujours à jour sur les informations officielles.""",
+        role="Analyste Expert IMT Dakar",
+        goal="Fournir des informations précises sur l'IMT et identifier si une action (contact/email) est pertinente.",
+        backstory="""Vous êtes l'Analyste Principal de l'IMT Dakar. Votre expertise couvre tous les programmes,
+        les frais de scolarité et les processus d'admission. Votre rôle est de fournir des réponses basées
+        uniquement sur les faits extraits du RAG. De plus, vous devez détecter si la requête de l'utilisateur
+        nécessite une escalade via le formulaire de contact ou un email au directeur. Si une action est nécessaire,
+        vous vérifiez scrupuleusement si nous avons déjà le NOM, l'EMAIL et le MESSAGE de l'utilisateur.""",
         tools=[recherche_imt_tool],
         llm=llm,
         verbose=True,
@@ -218,10 +222,12 @@ def create_agents(session_id: str = None):
     
     # Agent 2: Actioneer (Actions pratiques)
     actioneer = Agent(
-        role="Assistant Actions Automatisées IMT",
-        goal="Exécuter des actions pratiques comme remplir des formulaires, envoyer des emails, et traiter les demandes",
-        backstory="""Assistant technique expert en automatisation, maîtrise parfaite des outils web
-        et des protocoles de communication. Pragmatique et efficace.""",
+        role="Coordonnateur d'Actions IMT",
+        goal="Exécuter les outils d'automatisation uniquement lorsque toutes les données requises sont présentes.",
+        backstory="""Vous êtes un expert en exécution technique. Votre rigueur est absolue : vous ne déclenchez
+        jamais une action (formulaire ou email) s'il manque une information clé (nom, email ou corps du message).
+        Si des informations manquent, vous listez précisément ce qui fait défaut au lieu d'utiliser un outil.
+        Votre succès se mesure à la précision de vos rapports d'exécution.""",
         tools=[formulaire_contact_tool, email_directeur_tool],
         llm=llm,
         verbose=True,
@@ -229,12 +235,14 @@ def create_agents(session_id: str = None):
         max_iter=2
     )
     
-    # Agent 3: Manager (Coordination)
+    # Agent 3: Manager (Coordination & Synthèse)
     manager = Agent(
-        role="Manager de Processus IMT",
-        goal="Coordonner les agents pour fournir une réponse complète et exécuter les actions demandées",
-        backstory="""Manager expérimenté en gestion de projets éducatifs. Excellente capacité d'analyse
-        et de planification. S'assure que toutes les demandes sont traitées de manière optimale.""",
+        role="Directeur de la Relation Étudiant IMT",
+        goal="Assurer une expérience utilisateur fluide, chaleureuse et collecter les informations manquantes.",
+        backstory="""Vous êtes le visage de l'IMT Dakar. Votre priorité est la satisfaction de l'utilisateur.
+        Vous synthétisez le travail de l'Analyste et du Coordonnateur d'Actions. Si une action était prévue mais
+        qu'il manquait des informations (nom, email, etc.), vous les demandez avec courtoisie et professionnalisme
+        à l'utilisateur. Vos réponses doivent être engageantes et encourager l'interaction.""",
         llm=llm,
         verbose=True,
         memory=False,
@@ -272,53 +280,53 @@ class IMTCrew:
             tracer.start_trace(f"imt_session_{self.session_id}")
     
     def _create_tasks(self):
-        """Crée les tâches pour les agents"""
+        """Crée les tâches pour les agents avec gestion de collecte d'informations"""
         
-        # Tâche 1: Recherche (Researcher)
+        # Tâche 1: Analyse & Recherche
         research_task = Task(
-            description="""Analyse la requête utilisateur et recherche des informations précises sur l'IMT.
-            
-            Requête: {query}
+            description="""Analyse approfondie de la requête: '{query}'.
             
             {context}
             
             Instructions:
-            1. Utilise l'outil de recherche RAG pour obtenir des informations fiables.
-            2. Si la requête est une simple salutation ou ne nécessite pas de recherche technique, fournis une réponse amicale de base.
-            3. Structure les informations trouvées de manière claire.
-            4. Note si l'utilisateur semble vouloir effectuer une action (contact, email).""",
+            1. RECHERCHE: Utilise le RAG pour trouver des réponses précises sur l'IMT.
+            2. DIAGNOSTIC: L'utilisateur a-t-il besoin d'une action de contact (formulaire/email) ?
+            3. VÉRIFICATION: Si une action est nécessaire, vérifie si nous avons dans le contexte ou la requête:
+               - Le Nom complet
+               - L'Email
+               - Le Message spécifique
+            4. SORTIE: Fournis la réponse informative et liste CLAIREMENT les données manquantes pour une éventuelle action.""",
             agent=self.researcher,
-            expected_output="Informations structurées sur l'IMT ou réponse initiale à la requête",
+            expected_output="Analyse de la requête, informations extraites et inventaire des données utilisateur disponibles.",
             output_file="outputs/research_result.md"
         )
         
-        # Tâche 2: Exécution d'Actions (Actioneer)
+        # Tâche 2: Exécution de l'Action (Conditionnelle)
         action_task = Task(
-            description="""Détermine si une action automatisée est nécessaire pour la requête: '{query}' en te basant sur l'analyse du Researcher.
+            description="""Décision d'exécution pour la requête: '{query}'.
             
             Instructions:
-            1. SI ET SEULEMENT SI l'utilisateur demande explicitement de contacter l'IMT ou d'écrire au directeur, utilise l'outil approprié.
-            2. Si aucune action n'est demandée (ex: simple question, salutation), ne fais rien et indique "Aucune action requise".
-            3. Ne simule jamais d'outils inexistants.
-            4. En cas d'action, fournis le statut et les preuves.""",
+            1. Analyse l'inventaire des données fourni par le Researcher.
+            2. Si une action est requise ET que TOUTES les données (Nom, Email, Message) sont présentes, exécute l'outil approprié.
+            3. S'il manque ne serait-ce qu'une information, N'UTILISE AUCUN OUTIL et indique précisément : 'ACTION_INTERROMPUE: Manque [liste des champs]'.
+            4. Si aucune action n'est demandée, indique 'STATUT: Information uniquement'.""",
             agent=self.actioneer,
-            expected_output="Rapport d'exécution d'action ou confirmation qu'aucune action n'était nécessaire",
+            expected_output="Résultat de l'outil ou rapport d'interruption pour données manquantes.",
             context=[research_task],
             output_file="outputs/execution_report.md"
         )
 
-        # Tâche 3: Synthèse Finale (Manager)
+        # Tâche 3: Interaction Utilisateur & Synthèse
         synthesis_task = Task(
-            description="""Produis la réponse finale destinée à l'utilisateur pour sa requête: '{query}'.
+            description="""Synthèse finale et engagement pour la requête: '{query}'.
             
             Instructions:
-            1. Synthétise les informations du Researcher et les résultats de l'Actioneer.
-            2. Rédige une réponse POLIE, CHALEUREUSE et COMPLÈTE en français.
-            3. Si une action a été effectuée, confirme-le à l'utilisateur.
-            4. Si aucune information n'a été trouvée, suggère à l'utilisateur d'utiliser le formulaire de contact.
-            5. La réponse doit être directement adressée à l'utilisateur, sans métadonnées techniques.""",
+            1. Si le Coordonnateur a signalé 'ACTION_INTERROMPUE', demande à l'utilisateur les informations manquantes (Nom, Email ou détails du message) de manière très courtoise. Explique pourquoi nous en avons besoin pour l'aider davantage.
+            2. Si l'action a réussi, partage la confirmation et les preuves.
+            3. Dans tous les cas, fournis une réponse complète et chaleureuse basée sur les recherches de l'Analyste.
+            4. Adopte un ton enthousiaste, professionnel et digne d'un représentant de l'IMT Dakar.""",
             agent=self.manager,
-            expected_output="Une réponse conversationnelle finale, amicale et informative en français",
+            expected_output="Réponse finale chaleureuse, informative, ou demande d'informations complémentaires.",
             context=[research_task, action_task]
         )
         
