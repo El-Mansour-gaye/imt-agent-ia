@@ -8,7 +8,7 @@ Le pipeline est divisé en trois composants principaux :
 
 1.  **Scraping (feature/m1-scraping)** : Utilise Scrapy pour crawler `www.imt.sn`, extraire le contenu textuel et les liens, et sauvegarder les données dans `imt_data.json`.
 2.  **RAG Core (feature/m1-rag-core)** : Indexation des documents dans ChromaDB. Utilise Gemini (`text-embedding-004`) pour les embeddings et `tiktoken` pour le découpage récursif des textes en chunks de 512 tokens.
-3.  **Auto-refresh & Citations (feature/m1-auto-refresh)** : Gestion de la fraîcheur des données via Redis et génération de réponses citées avec Gemini-1.5-Flash.
+3.  **Auto-refresh & Citations (feature/m1-auto-refresh)** : Gestion de la fraîcheur des données via Redis et génération de réponses citées avec Gemini-1.5-pro.
 
 ## Utilisation
 
