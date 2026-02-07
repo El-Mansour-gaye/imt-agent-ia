@@ -230,7 +230,7 @@ class RedisSecurityManager:
             response = litellm.completion(
                 model=primary,
                 messages=[{"role": "user", "content": prompt}],
-                fallback_models=fallbacks,
+                fallbacks=fallbacks,
                 temperature=0.1
             )
             response_text = response.choices[0].message.content.strip()
