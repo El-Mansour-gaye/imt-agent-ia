@@ -70,24 +70,19 @@ class DirectorEmailGenerator:
         Returns:
             Dict avec subject, body, to_email
         """
-        # Tentative avec Grok (xAI) ou Gemini
+        # Tentative avec LLM (Gemini avec fallback Grok via LiteLLM)
         try:
-            xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
-            if xai_api_key:
-                from langchain_openai import ChatOpenAI
-                llm = ChatOpenAI(
-                    model=os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest"),
-                    api_key=xai_api_key,
-                    base_url="https://api.x.ai/v1",
-                    temperature=0.5
-                )
-            else:
-                from langchain_google_genai import ChatGoogleGenerativeAI
-                llm = ChatGoogleGenerativeAI(
-                    model=os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
-                    google_api_key=os.getenv("GEMINI_API_KEY"),
-                    temperature=0.5
-                )
+            import litellm
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+
+            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            primary = f"gemini/{model_name.replace('gemini/', '')}"
+
+            fallbacks = ["gemini/gemini-1.5-flash"]
+            if xai_key:
+                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
+                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
 
             prompt = f"""En tant qu'Assistant IA Officiel de l'IMT Dakar, rédigez un email institutionnel
             exemplaire destiné au Directeur de l'IMT.
@@ -111,8 +106,13 @@ class DirectorEmailGenerator:
             SUJET : [Sujet clair et explicite]
             CORPS : [Contenu de l'email]"""
             
-            response = llm.invoke(prompt)
-            email_content = response.content
+            response = litellm.completion(
+                model=primary,
+                messages=[{"role": "user", "content": prompt}],
+                fallback_models=fallbacks,
+                temperature=0.5
+            )
+            email_content = response.choices[0].message.content
             
             # Parser la réponse
             parts = email_content.split("CORPS:")

@@ -85,15 +85,35 @@ Extraits :
 Question : {query}
 """
 
-    model = genai.GenerativeModel("gemini-pro")
-    response = model.generate_content(prompt)
+    try:
+        import litellm
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        primary = f"gemini/{model_name.replace('gemini/', '')}"
+
+        fallbacks = ["gemini/gemini-1.5-flash"]
+        xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
+        if xai_key:
+            grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
+            fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+
+        response = litellm.completion(
+            model=primary,
+            messages=[{"role": "user", "content": prompt}],
+            fallback_models=fallbacks,
+            temperature=0.4
+        )
+        answer = response.choices[0].message.content
+    except Exception as e:
+        print(f"⚠️ Search LLM failed: {e}")
+        # Very basic fallback
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        answer = response.text
 
     # 3. Format result
-    sources = []
-    for c in chunks:
-        sources.append({"url": c['source'], "snippet": c['content'][:200] + "..."})
+    sources = [{"url": c['source'], "snippet": c['content'][:200] + "..."} for c in chunks]
 
     return {
-        "answer": response.text,
+        "answer": answer,
         "sources": sources
     }
