@@ -245,6 +245,14 @@ class MultilingualProcessor:
             gemini_key = os.getenv("GEMINI_API_KEY")
             xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
             
+            # Nettoyage des clés
+            if xai_key:
+                xai_key = xai_key.strip().lstrip('=')
+                os.environ["XAI_API_KEY"] = xai_key
+            if gemini_key:
+                gemini_key = gemini_key.strip().lstrip('=')
+                os.environ["GEMINI_API_KEY"] = gemini_key
+
             if not gemini_key and not xai_key:
                 return self._fallback_translation(text, target_lang)
             

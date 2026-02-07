@@ -53,6 +53,12 @@ def get_llm():
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     xai_api_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
 
+    # Nettoyage des clés au cas où (ex: double '=' dans le .env)
+    if xai_api_key:
+        xai_api_key = xai_api_key.strip().lstrip('=')
+    if gemini_api_key:
+        gemini_api_key = gemini_api_key.strip().lstrip('=')
+
     # Construction de la liste de modèles et fallbacks
     # Priorité à Grok (xAI) comme demandé par l'utilisateur
     if xai_api_key:
