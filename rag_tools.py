@@ -112,9 +112,10 @@ def index_documents(json_file, rebuild=False):
         batch_ids = all_ids[i:i+batch_size]
 
         result = genai.embed_content(
-            model="models/gemini-embedding-001",
+            model="models/text-embedding-004",
             content=batch_chunks,
-            task_type="retrieval_document"
+            task_type="retrieval_document",
+            output_dimensionality=768
         )
         embeddings = result['embedding']
 
@@ -134,9 +135,10 @@ def imt_rag_search(query: str):
 
     # Embed the query
     result = genai.embed_content(
-        model="models/gemini-embedding-001",
+        model="models/text-embedding-004",
         content=query,
-        task_type="retrieval_query"
+        task_type="retrieval_query",
+        output_dimensionality=768
     )
     query_embedding = result['embedding']
 
