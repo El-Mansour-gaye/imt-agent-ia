@@ -60,7 +60,7 @@ def get_llm():
         # Nettoyage si l'utilisateur a mis 'gemini/' dans son .env
         if model_name.startswith("gemini/"):
             model_name = model_name.replace("gemini/", "")
-        
+
         primary = f"gemini/{model_name}"
 
         # Fallbacks intelligents
@@ -71,7 +71,7 @@ def get_llm():
             if grok_model.startswith("xai/"):
                 grok_model = grok_model.replace("xai/", "")
             fallbacks.append(f"xai/{grok_model}")
-        
+
         # Ajouter d'autres versions de Gemini en dernier recours
         for g_model in ["gemini-1.5-flash", "gemini-2.0-flash-exp"]:
             if f"gemini/{g_model}" != primary:
