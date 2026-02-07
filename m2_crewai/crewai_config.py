@@ -56,13 +56,26 @@ def get_llm():
     # Construction de la liste de modèles et fallbacks
     if gemini_api_key:
         # Priorité à Gemini
-        model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        # Nettoyage si l'utilisateur a mis 'gemini/' dans son .env
+        if model_name.startswith("gemini/"):
+            model_name = model_name.replace("gemini/", "")
+
         primary = f"gemini/{model_name}"
 
-        fallbacks = ["gemini/gemini-flash-latest", "gemini/gemini-2.0-flash"]
+        # Fallbacks intelligents
+        fallbacks = []
         if xai_api_key:
             grok_model = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
+            # Nettoyage si 'xai/' présent
+            if grok_model.startswith("xai/"):
+                grok_model = grok_model.replace("xai/", "")
             fallbacks.append(f"xai/{grok_model}")
+
+        # Ajouter d'autres versions de Gemini en dernier recours
+        for g_model in ["gemini-1.5-flash", "gemini-2.0-flash-exp"]:
+            if f"gemini/{g_model}" != primary:
+                fallbacks.append(f"gemini/{g_model}")
 
         # Nettoyage fallbacks
         unique_fallbacks = []
