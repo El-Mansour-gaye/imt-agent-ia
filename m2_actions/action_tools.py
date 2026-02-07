@@ -281,38 +281,37 @@ def send_director_email(
         destinataire=destinataire
     )
     
-    # Générer un email formel avec Gemini si disponible
+    # Générer un email formel avec LLM si disponible
     email_content = data.corps
     try:
-        import google.generativeai as genai
-        api_key = os.getenv("GEMINI_API_KEY")
+        import litellm
+        gemini_key = os.getenv("GEMINI_API_KEY")
+        xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
         
-        if api_key:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-pro')
+        if gemini_key or xai_key:
+            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            primary = f"gemini/{model_name.replace('gemini/', '')}"
             
-            prompt = f"""
-            Transforme ce message en email professionnel pour le directeur de l'IMT:
-            
+            fallbacks = ["gemini/gemini-1.5-flash"]
+            if xai_key:
+                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
+                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+
+            prompt = f"""Transforme ce message en email professionnel pour le directeur de l'IMT:
             Sujet: {data.sujet}
             Message original: {data.corps}
+            Exigences: Français formel, Signature: 'Assistant IMT AI'"""
             
-            Format demandé:
-            1. Formule d'appel formelle
-            2. Introduction courtoise
-            3. Corps du message structuré
-            4. Formule de politesse
-            5. Signature: "Assistant IMT AI"
-            
-            Langue: Français formel
-            Style: Professionnel, éducatif, respectueux
-            """
-            
-            response = model.generate_content(prompt)
-            email_content = response.text
-            print("✅ Email professionnel généré avec Gemini")
+            response = litellm.completion(
+                model=primary,
+                messages=[{"role": "user", "content": prompt}],
+                fallback_models=fallbacks,
+                temperature=0.3
+            )
+            email_content = response.choices[0].message.content
+            print("✅ Email professionnel généré avec LLM")
     except Exception as e:
-        print(f"⚠️ Génération Gemini échouée: {e}, utilisation du texte original")
+        print(f"⚠️ Génération LLM échouée: {e}, utilisation du texte original")
     
     try:
         # Préparer le contenu HTML (remplacer les sauts de ligne par <br>)

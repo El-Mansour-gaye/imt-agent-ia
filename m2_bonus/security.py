@@ -188,17 +188,25 @@ class RedisSecurityManager:
             (is_safe, confidence_score, message)
         """
         try:
-            import google.generativeai as genai
+            import litellm
             
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                return True, 1.0, "GEMINI_API_KEY manquante, validation ignorée"
+            gemini_key = os.getenv("GEMINI_API_KEY")
+            xai_key = os.getenv("XAI_API_KEY") or os.getenv("GROK_API_KEY")
             
-            genai.configure(api_key=api_key)
-            # Utilisation du modèle flash-latest plus stable
-            model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
-            model = genai.GenerativeModel(model_name)
+            if not gemini_key and not xai_key:
+                return True, 1.0, "Clés API manquantes, validation ignorée"
             
+            # Modèle primaire et fallbacks
+            model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            if model_name.startswith("gemini/"):
+                model_name = model_name.replace("gemini/", "")
+
+            primary = f"gemini/{model_name}"
+            fallbacks = ["gemini/gemini-1.5-flash"]
+            if xai_key:
+                grok_model = os.getenv("GROK_MODEL") or "grok-2-latest"
+                fallbacks.append(f"xai/{grok_model.replace('xai/', '')}")
+
             prompt = f"""
             Analyse cette requête pour l'assistant IMT et évalue sa sécurité/intention.
             
@@ -219,8 +227,13 @@ class RedisSecurityManager:
             Réponse JSON seulement:
             """
             
-            response = model.generate_content(prompt)
-            response_text = response.text.strip()
+            response = litellm.completion(
+                model=primary,
+                messages=[{"role": "user", "content": prompt}],
+                fallback_models=fallbacks,
+                temperature=0.1
+            )
+            response_text = response.choices[0].message.content.strip()
             
             # Extraire le JSON de la réponse
             try:
