@@ -1,0 +1,21 @@
+
+### 🛠️ ESPACE ADMIN - Dashboard Live
+**Session ID actuelle:** `IMT-d87b6688`
+**Statut Serveur:** 🟢 Opérationnel
+
+---
+**📦 RAG & DATA:**
+- 🧩 Chunks indexés: `0`
+- 📅 Fraîcheur: `0 jours`
+- 🌍 Langues: `FR / Wolof (TTS)`
+
+---
+**⚡ PERFORMANCE & COÛT:**
+- 💸 Coût estimé: `0.02$`
+- ⏱️ Latence moy: `1.2s`
+- 👍 100% (0/0)
+
+---
+**📈 ANALYTICS:**
+- Top Formation: `GENERAL`
+- Total Sessions: `1`

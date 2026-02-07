@@ -115,6 +115,14 @@ def get_summary(session_id: str) -> Optional[str]:
         data = _load_sessions()
         return data.get(key)
 
+def get_all_session_ids() -> List[str]:
+    try:
+        keys = redis_client.keys("session:*")
+        return [k.replace("session:", "") for k in keys]
+    except Exception:
+        data = _load_sessions()
+        return [k.replace("session:", "") for k in data.keys() if k.startswith("session:")]
+
 # =========================
 # CONTEXTE POUR AGENT IA
 # =========================
