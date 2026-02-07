@@ -416,6 +416,10 @@ class IMTCrew:
         inputs_with_context["context"] = self.context if self.context else ""
         inputs_with_context["user_messages_count"] = user_messages_count
         
+        # Sécurité pour les variables template (ex: Langfuse prompt contenant {extracted_data})
+        if "extracted_data" not in inputs_with_context:
+            inputs_with_context["extracted_data"] = ""
+
         log_important(f"🚀 Démarrage CrewAI (Msg #{user_messages_count}) pour: '{query[:50]}...'")
         
         try:
