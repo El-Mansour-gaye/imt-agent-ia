@@ -126,11 +126,7 @@ class LangfuseTracer:
 
         try:
             from langfuse.langchain import CallbackHandler
-            return CallbackHandler(
-                public_key=self.public_key,
-                secret_key=self.secret_key,
-                host=self.host
-            )
+            return CallbackHandler()
         except (ImportError, ModuleNotFoundError):
             log_warn("⚠️ langfuse.langchain ou langchain non disponible")
             return None
