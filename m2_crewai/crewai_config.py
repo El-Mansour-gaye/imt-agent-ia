@@ -55,16 +55,22 @@ def get_llm():
 
     # Construction de la liste de modèles et fallbacks
     if gemini_api_key:
-        # Priorité à Gemini
-        model_name = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+        # On privilégie des modèles stables pour le tier gratuit
+        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
         primary = f"gemini/{model_name}"
 
-        fallbacks = ["gemini/gemini-flash-latest", "gemini/gemini-2.0-flash"]
+        # Liste de repli étendue pour maximiser les chances de succès
+        fallbacks = [
+            "gemini/gemini-1.5-flash",
+            "gemini/gemini-pro",
+            "gemini/gemini-2.0-flash"
+        ]
+
         if xai_api_key:
             grok_model = os.getenv("GROK_MODEL") or os.getenv("XAI_MODEL", "grok-2-latest")
             fallbacks.append(f"xai/{grok_model}")
 
-        # Nettoyage fallbacks
+        # Nettoyage fallbacks (enlever primary et doublons)
         unique_fallbacks = []
         for f in fallbacks:
             if f not in unique_fallbacks and f != primary:
@@ -76,8 +82,9 @@ def get_llm():
                 model=primary,
                 fallback_models=unique_fallbacks,
                 api_key=gemini_api_key,
-                temperature=0.4,
-                max_tokens=2000
+                temperature=0.3, # Temp basse pour plus de stabilité
+                max_tokens=2000,
+                max_rpm=5 # Plus restrictif pour éviter les 429
             )
         except Exception as e:
             print(f"⚠️ Erreur initialisation Gemini: {e}")

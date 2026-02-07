@@ -111,11 +111,22 @@ def index_documents(json_file, rebuild=False):
         batch_metadatas = all_metadatas[i:i+batch_size]
         batch_ids = all_ids[i:i+batch_size]
 
-        result = genai.embed_content(
-            model="models/text-embedding-004",
-            content=batch_chunks,
-            task_type="retrieval_document"
-        )
+        # Inversion de priorité pour utiliser le modèle le plus universel
+        # text-embedding-004 peut poser problème sur certaines versions d'API/régions
+        try:
+            model_embedding = "models/embedding-001"
+            result = genai.embed_content(
+                model=model_embedding,
+                content=batch_chunks,
+                task_type="retrieval_document"
+            )
+        except Exception:
+            model_embedding = "models/text-embedding-004"
+            result = genai.embed_content(
+                model=model_embedding,
+                content=batch_chunks,
+                task_type="retrieval_document"
+            )
         embeddings = result['embedding']
 
         collection.add(
@@ -132,12 +143,21 @@ def imt_rag_search(query: str):
     client = chromadb.PersistentClient(path=CHROMA_PATH)
     collection = client.get_collection(name="imt_docs")
 
-    # Embed the query
-    result = genai.embed_content(
-        model="models/text-embedding-004",
-        content=query,
-        task_type="retrieval_query"
-    )
+    # Embed the query with fallback (Priorité embedding-001)
+    try:
+        model_embedding = "models/embedding-001"
+        result = genai.embed_content(
+            model=model_embedding,
+            content=query,
+            task_type="retrieval_query"
+        )
+    except Exception:
+        model_embedding = "models/text-embedding-004"
+        result = genai.embed_content(
+            model=model_embedding,
+            content=query,
+            task_type="retrieval_query"
+        )
     query_embedding = result['embedding']
 
     results = collection.query(
